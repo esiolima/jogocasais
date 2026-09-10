@@ -213,7 +213,7 @@ wss.on('connection', (ws) => {
 
       const playerId = uid();
 
-      if (msg.target === 'new') {
+      if (msg.target === '__new__') {
         if (room.couples.length >= room.maxCouples) {
           return send(ws, { type: 'error', message: 'Esta partida já está cheia (4 casais).' });
         }
