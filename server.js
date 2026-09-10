@@ -196,7 +196,7 @@ wss.on('connection', (ws) => {
       const room = rooms.get((msg.code || '').toUpperCase());
       if (!room) return send(ws, { type: 'lookup_result', found: false });
       if (room.status !== 'lobby') return send(ws, { type: 'lookup_result', found: true, started: true });
-      send(ws, Object.assign({ type: 'lookup_result', found: true, started: false }, lobbyPayload(room)));
+      send(ws, Object.assign(lobbyPayload(room), { type: 'lookup_result', found: true, started: false }));
       return;
     }
 
