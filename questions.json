@@ -1,0 +1,402 @@
+[
+  {
+    "id": 1,
+    "text": "Quem do casal seria melhor para desvendar um crime?"
+  },
+  {
+    "id": 2,
+    "text": "Quem teria mais chance de sobreviver a um apocalipse zumbi?"
+  },
+  {
+    "id": 3,
+    "text": "Quem seria melhor em uma viagem sem roteiro?"
+  },
+  {
+    "id": 4,
+    "text": "Quem provavelmente esqueceria onde estacionou o carro?"
+  },
+  {
+    "id": 5,
+    "text": "Quem teria mais coragem de morar em outro país?"
+  },
+  {
+    "id": 6,
+    "text": "Quem seria melhor para negociar um desconto?"
+  },
+  {
+    "id": 7,
+    "text": "Quem teria mais chance de ficar rico primeiro?"
+  },
+  {
+    "id": 8,
+    "text": "Quem gastaria dinheiro em uma coisa completamente inútil, mas muito legal?"
+  },
+  {
+    "id": 9,
+    "text": "Quem seria melhor para cuidar de uma planta por dez anos?"
+  },
+  {
+    "id": 10,
+    "text": "Quem provavelmente perderia o celular dentro da própria casa?"
+  },
+  {
+    "id": 11,
+    "text": "Quem seria escolhido para liderar um grupo em uma ilha deserta?"
+  },
+  {
+    "id": 12,
+    "text": "Quem teria mais chance de virar famoso por acaso?"
+  },
+  {
+    "id": 13,
+    "text": "Quem seria melhor em um concurso de culinária?"
+  },
+  {
+    "id": 14,
+    "text": "Quem provavelmente dormiria durante um filme no cinema?"
+  },
+  {
+    "id": 15,
+    "text": "Quem teria mais dificuldade para guardar um segredo?"
+  },
+  {
+    "id": 16,
+    "text": "Quem seria melhor detetive em uma investigação misteriosa?"
+  },
+  {
+    "id": 17,
+    "text": "Quem teria mais coragem de experimentar uma comida estranha?"
+  },
+  {
+    "id": 18,
+    "text": "Quem provavelmente compraria algo só porque estava em promoção?"
+  },
+  {
+    "id": 19,
+    "text": "Quem seria melhor para montar um móvel sem ler o manual?"
+  },
+  {
+    "id": 20,
+    "text": "Quem teria mais chance de sobreviver em um reality show?"
+  },
+  {
+    "id": 21,
+    "text": "Quem seria o primeiro a fazer amizade com alienígenas?"
+  },
+  {
+    "id": 22,
+    "text": "Quem provavelmente chegaria atrasado ao próprio casamento?"
+  },
+  {
+    "id": 23,
+    "text": "Quem seria melhor para organizar uma festa surpresa?"
+  },
+  {
+    "id": 24,
+    "text": "Quem teria mais chance de esquecer uma data importante?"
+  },
+  {
+    "id": 25,
+    "text": "Quem seria melhor em convencer alguém de alguma coisa?"
+  },
+  {
+    "id": 26,
+    "text": "Quem provavelmente teria uma ideia absurda que acabaria dando certo?"
+  },
+  {
+    "id": 27,
+    "text": "Quem seria mais útil durante um apagão de uma semana?"
+  },
+  {
+    "id": 28,
+    "text": "Quem teria mais chance de adotar um animal por impulso?"
+  },
+  {
+    "id": 29,
+    "text": "Quem seria melhor para escolher um restaurante?"
+  },
+  {
+    "id": 30,
+    "text": "Quem provavelmente pediria sobremesa mesmo dizendo que não queria?"
+  },
+  {
+    "id": 31,
+    "text": "Quem teria mais coragem de cantar em público?"
+  },
+  {
+    "id": 32,
+    "text": "Quem seria melhor para cuidar das finanças do casal?"
+  },
+  {
+    "id": 33,
+    "text": "Quem provavelmente faria uma compra sem contar para o outro?"
+  },
+  {
+    "id": 34,
+    "text": "Quem seria mais provável de rir em uma situação em que não deveria?"
+  },
+  {
+    "id": 35,
+    "text": "Quem seria melhor para escapar de uma sala de fuga?"
+  },
+  {
+    "id": 36,
+    "text": "Quem teria mais chance de virar um influenciador digital?"
+  },
+  {
+    "id": 37,
+    "text": "Quem provavelmente passaria mais tempo escolhendo o que assistir?"
+  },
+  {
+    "id": 38,
+    "text": "Quem seria melhor para improvisar uma solução quando tudo dá errado?"
+  },
+  {
+    "id": 39,
+    "text": "Quem teria mais chance de ganhar uma discussão usando argumentos?"
+  },
+  {
+    "id": 40,
+    "text": "Quem seria melhor em um jogo de estratégia?"
+  },
+  {
+    "id": 41,
+    "text": "Quem provavelmente esqueceria uma senha que acabou de criar?"
+  },
+  {
+    "id": 42,
+    "text": "Quem teria mais coragem de viajar sozinho?"
+  },
+  {
+    "id": 43,
+    "text": "Quem seria melhor para decorar a casa?"
+  },
+  {
+    "id": 44,
+    "text": "Quem provavelmente faria amizade com um desconhecido durante uma viagem?"
+  },
+  {
+    "id": 45,
+    "text": "Quem teria mais chance de comprar uma casa completamente diferente do que imaginava?"
+  },
+  {
+    "id": 46,
+    "text": "Quem seria melhor em reconhecer uma mentira?"
+  },
+  {
+    "id": 47,
+    "text": "Quem provavelmente inventaria uma desculpa criativa para não sair de casa?"
+  },
+  {
+    "id": 48,
+    "text": "Quem seria mais provável de aceitar um desafio maluco?"
+  },
+  {
+    "id": 49,
+    "text": "Quem seria melhor para planejar uma viagem inteira?"
+  },
+  {
+    "id": 50,
+    "text": "Quem teria mais chance de sobreviver a uma noite em uma floresta?"
+  },
+  {
+    "id": 51,
+    "text": "Quem provavelmente levaria coisas demais para uma viagem curta?"
+  },
+  {
+    "id": 52,
+    "text": "Quem seria melhor em uma competição de conhecimentos gerais?"
+  },
+  {
+    "id": 53,
+    "text": "Quem teria mais chance de ganhar um prêmio em um programa de TV?"
+  },
+  {
+    "id": 54,
+    "text": "Quem provavelmente começaria uma reforma sem saber exatamente como terminar?"
+  },
+  {
+    "id": 55,
+    "text": "Quem seria melhor para escolher presentes?"
+  },
+  {
+    "id": 56,
+    "text": "Quem teria mais chance de esquecer o nome de alguém poucos segundos depois de conhecê-lo?"
+  },
+  {
+    "id": 57,
+    "text": "Quem seria mais provável de fazer uma piada em uma situação séria?"
+  },
+  {
+    "id": 58,
+    "text": "Quem seria melhor para convencer um guarda de que tudo está sob controle?"
+  },
+  {
+    "id": 59,
+    "text": "Quem teria mais chance de ser escolhido como representante da turma ou do grupo?"
+  },
+  {
+    "id": 60,
+    "text": "Quem provavelmente passaria horas pesquisando antes de comprar alguma coisa?"
+  },
+  {
+    "id": 61,
+    "text": "Quem seria melhor em um interrogatório?"
+  },
+  {
+    "id": 62,
+    "text": "Quem teria mais chance de se perder usando GPS?"
+  },
+  {
+    "id": 63,
+    "text": "Quem provavelmente faria uma amizade improvável com um vizinho?"
+  },
+  {
+    "id": 64,
+    "text": "Quem seria melhor para tomar uma decisão sob pressão?"
+  },
+  {
+    "id": 65,
+    "text": "Quem teria mais chance de virar chefe de uma grande empresa?"
+  },
+  {
+    "id": 66,
+    "text": "Quem provavelmente esqueceria de carregar o celular?"
+  },
+  {
+    "id": 67,
+    "text": "Quem seria melhor para escolher uma música para cada momento?"
+  },
+  {
+    "id": 68,
+    "text": "Quem teria mais coragem de fazer uma mudança radical de carreira?"
+  },
+  {
+    "id": 69,
+    "text": "Quem provavelmente gastaria uma fortuna em um hobby novo?"
+  },
+  {
+    "id": 70,
+    "text": "Quem seria melhor em convencer um grupo a mudar de plano?"
+  },
+  {
+    "id": 71,
+    "text": "Quem teria mais chance de ser confundido com uma celebridade?"
+  },
+  {
+    "id": 72,
+    "text": "Quem provavelmente seria o primeiro a perceber que algo estranho está acontecendo?"
+  },
+  {
+    "id": 73,
+    "text": "Quem seria melhor para administrar um hotel?"
+  },
+  {
+    "id": 74,
+    "text": "Quem teria mais chance de ganhar uma competição de dança?"
+  },
+  {
+    "id": 75,
+    "text": "Quem provavelmente inventaria uma teoria da conspiração só por diversão?"
+  },
+  {
+    "id": 76,
+    "text": "Quem seria melhor para resolver um problema de lógica?"
+  },
+  {
+    "id": 77,
+    "text": "Quem teria mais chance de esquecer uma coisa importante ao sair de casa?"
+  },
+  {
+    "id": 78,
+    "text": "Quem provavelmente faria amizade com o motorista de um táxi ou aplicativo?"
+  },
+  {
+    "id": 79,
+    "text": "Quem seria melhor em uma caça ao tesouro?"
+  },
+  {
+    "id": 80,
+    "text": "Quem teria mais chance de abrir um negócio próprio?"
+  },
+  {
+    "id": 81,
+    "text": "Quem provavelmente transformaria um pequeno problema em uma grande história?"
+  },
+  {
+    "id": 82,
+    "text": "Quem seria melhor para escolher o destino de uma viagem surpresa?"
+  },
+  {
+    "id": 83,
+    "text": "Quem teria mais chance de passar um mês sem redes sociais?"
+  },
+  {
+    "id": 84,
+    "text": "Quem provavelmente começaria a rir antes de terminar de contar uma história?"
+  },
+  {
+    "id": 85,
+    "text": "Quem seria melhor em convencer alguém a dar uma segunda chance?"
+  },
+  {
+    "id": 86,
+    "text": "Quem teria mais chance de sobreviver em um filme de aventura?"
+  },
+  {
+    "id": 87,
+    "text": "Quem provavelmente faria uma compra e só depois descobriria que não precisava dela?"
+  },
+  {
+    "id": 88,
+    "text": "Quem seria melhor para negociar com um vilão de filme?"
+  },
+  {
+    "id": 89,
+    "text": "Quem teria mais chance de ganhar uma partida contra um campeão mundial em um jogo desconhecido?"
+  },
+  {
+    "id": 90,
+    "text": "Quem provavelmente seria o primeiro a investigar um barulho estranho em casa?"
+  },
+  {
+    "id": 91,
+    "text": "Quem seria melhor para escolher o nome de um filho?"
+  },
+  {
+    "id": 92,
+    "text": "Quem teria mais chance de morar em uma casa totalmente automatizada?"
+  },
+  {
+    "id": 93,
+    "text": "Quem provavelmente seria reconhecido por uma habilidade muito específica?"
+  },
+  {
+    "id": 94,
+    "text": "Quem seria melhor para improvisar um discurso sem preparação?"
+  },
+  {
+    "id": 95,
+    "text": "Quem teria mais chance de receber uma herança inesperada e gastar rápido?"
+  },
+  {
+    "id": 96,
+    "text": "Quem provavelmente faria amizade com alguém completamente oposto à sua personalidade?"
+  },
+  {
+    "id": 97,
+    "text": "Quem seria melhor para comandar uma missão espacial?"
+  },
+  {
+    "id": 98,
+    "text": "Quem teria mais chance de se tornar prefeito de uma cidade?"
+  },
+  {
+    "id": 99,
+    "text": "Quem provavelmente aceitaria participar de um experimento científico estranho?"
+  },
+  {
+    "id": 100,
+    "text": "Quem seria melhor para decidir o que fazer em um domingo sem planos?"
+  }
+]
