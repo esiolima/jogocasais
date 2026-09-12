@@ -77,7 +77,8 @@ function buildDuplaQuestionSet(opts) {
     }
   } else {
     const theme = themeById(themeId) || THEMES[0];
-    pool = theme.questions.map((q) => ({ text: q, themeId: theme.id, themeName: theme.name, themeIcon: theme.icon, value: 1 }));
+    pool = theme.questions.map((q) => ({ text: q, themeId: theme.id, themeName: theme.name, themeIcon: theme.icon, value: 1 }))
+      .concat(theme.tension.map((q) => ({ text: q, themeId: theme.id, themeName: theme.name, themeIcon: theme.icon, value: 1 })));
   }
 
   const n = Math.min(questionCount, pool.length);
@@ -108,7 +109,7 @@ function lobbyPayloadDupla(room) {
     questionCount: room.questions.length,
     couples: room.couples.map((c) => ({
       id: c.id,
-      players: c.players.map((p) => ({ name: p.name, gender: p.gender })),
+      players: c.players.map((p) => ({ name: p.name, gender: p.gender, disconnected: !!p.disconnected })),
       complete: c.players.length === 2,
     })),
   };
@@ -204,7 +205,7 @@ function lobbyPayloadGrupo(room) {
   return {
     type: 'lobby_state', mode: 'grupo', code: room.code, flavor: room.flavor,
     maxPlayers: room.maxPlayers, hostId: room.hostId, questionCount: room.questions.length,
-    players: room.players.map((p) => ({ id: p.id, name: p.name })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name, disconnected: !!p.disconnected })),
   };
 }
 
@@ -290,7 +291,7 @@ wss.on('connection', (ws) => {
       const name = (msg.name || '').trim().slice(0, 30);
       if (!name) return send(ws, { type: 'error', message: 'Digite seu nome.' });
       const mode = msg.mode === 'grupo' ? 'grupo' : 'dupla';
-      const questionCount = QUESTION_COUNT_OPTIONS.includes(msg.questionCount) ? msg.questionCount : 20;
+      const questionCount = Number.isInteger(msg.questionCount) && msg.questionCount > 0 && msg.questionCount <= 400 ? msg.questionCount : 20;
       const customQuestions = Array.isArray(msg.customQuestions)
         ? msg.customQuestions.map((q) => String(q).trim()).filter(Boolean).slice(0, 200) : null;
       const code = genCode();
@@ -305,29 +306,31 @@ wss.on('connection', (ws) => {
         const questions = buildDuplaQuestionSet({ themeId, rankingMode, tensionMode, questionCount, customQuestions });
 
         const playerId = uid();
-        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+        const sessionToken = uid() + uid();
+        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
         const room = {
           mode, code, maxCouples: MAX_COUPLES, relationshipType, themeId, rankingMode, tensionMode,
           couples: [couple], questions, currentIndex: 0, status: 'lobby', hostCoupleId: couple.id,
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0 });
+        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0, sessionToken });
         broadcastLobbyDupla(room);
       } else {
         const flavor = msg.flavor === 'familia' ? 'familia' : 'galera';
         const tensionMode = !!msg.tensionMode;
         const questions = buildGrupoQuestionSet({ tensionMode, questionCount, customQuestions });
         const playerId = uid();
+        const sessionToken = uid() + uid();
         const room = {
           mode, code, flavor, tensionMode, maxPlayers: MAX_GROUP_PLAYERS,
-          players: [{ id: playerId, name, ws }],
+          players: [{ id: playerId, name, ws, sessionToken }],
           questions, currentIndex: 0, status: 'lobby', hostId: playerId,
           rounds: [{ votes: {}, ready: {}, winnerId: null }],
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'room_created', mode, code, playerId });
+        send(ws, { type: 'room_created', mode, code, playerId, sessionToken });
         broadcastLobbyGrupo(room);
       }
       return;
@@ -353,27 +356,62 @@ wss.on('connection', (ws) => {
       if (room.mode === 'dupla') {
         const gender = msg.gender === 'M' ? 'M' : 'F';
         const playerId = uid();
+        const sessionToken = uid() + uid();
         if (msg.target === 'new') {
           if (room.couples.length >= room.maxCouples) return send(ws, { type: 'error', message: 'Esta partida já está cheia (4 duplas).' });
-          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
           room.couples.push(couple);
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0 });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0, sessionToken });
         } else {
           const couple = room.couples.find((c) => c.id === msg.target);
           if (!couple || couple.players.length >= 2) return send(ws, { type: 'error', message: 'Essa vaga já foi preenchida.' });
-          couple.players.push({ id: playerId, name, gender, ws });
+          couple.players.push({ id: playerId, name, gender, ws, sessionToken });
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 1;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1 });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1, sessionToken });
         }
         broadcastLobbyDupla(room);
       } else {
         if (room.players.length >= room.maxPlayers) return send(ws, { type: 'error', message: `Esta partida já está cheia (${room.maxPlayers} pessoas).` });
         const playerId = uid();
-        room.players.push({ id: playerId, name, ws });
+        const sessionToken = uid() + uid();
+        room.players.push({ id: playerId, name, ws, sessionToken });
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'joined', mode: 'grupo', code, playerId });
+        send(ws, { type: 'joined', mode: 'grupo', code, playerId, sessionToken });
         broadcastLobbyGrupo(room);
+      }
+      return;
+    }
+
+    if (msg.type === 'rejoin') {
+      const code = (msg.code || '').toUpperCase();
+      const room = rooms.get(code);
+      const token = msg.sessionToken;
+      if (!room || !token) return send(ws, { type: 'rejoin_failed' });
+
+      if (room.mode === 'dupla') {
+        let foundCouple = null; let foundIdx = -1;
+        for (const c of room.couples) {
+          const idx = c.players.findIndex((p) => p.sessionToken === token);
+          if (idx !== -1) { foundCouple = c; foundIdx = idx; break; }
+        }
+        if (!foundCouple) return send(ws, { type: 'rejoin_failed' });
+        foundCouple.players[foundIdx].ws = ws;
+        foundCouple.players[foundIdx].disconnected = false;
+        ws.roomCode = code; ws.coupleId = foundCouple.id; ws.playerIndex = foundIdx;
+        send(ws, { type: 'rejoin_ok', mode: 'dupla', code, coupleId: foundCouple.id, playerIndex: foundIdx, status: room.status });
+        if (room.status === 'lobby') { send(ws, lobbyPayloadDupla(room)); broadcastLobbyDupla(room); }
+        else if (room.status === 'playing') send(ws, gamePayloadForDupla(room, foundCouple, foundIdx));
+        else send(ws, finishedPayloadDupla(room));
+      } else {
+        const p = room.players.find((pl) => pl.sessionToken === token);
+        if (!p) return send(ws, { type: 'rejoin_failed' });
+        p.ws = ws; p.disconnected = false;
+        ws.roomCode = code; ws.playerId = p.id;
+        send(ws, { type: 'rejoin_ok', mode: 'grupo', code, playerId: p.id, status: room.status });
+        if (room.status === 'lobby') { send(ws, lobbyPayloadGrupo(room)); broadcastLobbyGrupo(room); }
+        else if (room.status === 'playing') send(ws, gamePayloadForGrupo(room, p.id));
+        else send(ws, finishedPayloadGrupo(room));
       }
       return;
     }
@@ -480,7 +518,7 @@ setInterval(() => {
 // Endpoint auxiliar para o front-end montar as telas de escolha de tema.
 app.get('/api/themes', (req, res) => {
   res.json({
-    themes: THEMES.map((t) => ({ id: t.id, name: t.name, icon: t.icon, count: t.questions.length, rankingPoints: t.rankingPoints })),
+    themes: THEMES.map((t) => ({ id: t.id, name: t.name, icon: t.icon, count: t.questions.length, total: t.questions.length + t.tension.length, rankingPoints: t.rankingPoints })),
     questionCountOptions: QUESTION_COUNT_OPTIONS,
   });
 });
