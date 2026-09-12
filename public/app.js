@@ -330,7 +330,7 @@ function screenJoin() {
         Entrar como parceiro(a) de <b>&nbsp;${c.players[0].name}</b>
       </div>
     `).join('');
-    if (canNew) options += `<div class="gender-opt ${S.joinTarget === '__new__' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'__new__'})">➕ Criar nova dupla</div>`;
+    if (canNew) options += `<div class="gender-opt ${S.joinTarget === 'new' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'new'})">➕ Criar nova dupla</div>`;
     if (!options) options = `<p class="muted">Esta partida já está cheia.</p>`;
 
     return `
