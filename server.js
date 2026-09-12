@@ -338,7 +338,7 @@ wss.on('connection', (ws) => {
       if (!room) return send(ws, { type: 'lookup_result', found: false });
       if (room.status !== 'lobby') return send(ws, { type: 'lookup_result', found: true, started: true });
       const payload = room.mode === 'dupla' ? lobbyPayloadDupla(room) : lobbyPayloadGrupo(room);
-      send(ws, Object.assign({ type: 'lookup_result', found: true, started: false }, payload));
+      send(ws, Object.assign(payload, { type: 'lookup_result', found: true, started: false }));
       return;
     }
 
