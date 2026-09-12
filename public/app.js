@@ -21,6 +21,7 @@ let S = {
   coupleId: null,
   playerIndex: null,
   playerId: null,
+  sessionToken: null,
   lobby: null,
   game: null,
   finished: null,
@@ -45,20 +46,60 @@ let S = {
   joinTarget: null,
 };
 
+const SESSION_KEY = 'conectai_session';
+function saveSession() {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      roomCode: S.roomCode, mode: S.mode, sessionToken: S.sessionToken,
+    }));
+  } catch (e) { /* localStorage indisponível (modo anônimo etc.) */ }
+}
+function loadSession() {
+  try { const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { return null; }
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+}
+
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
-  ws.addEventListener('open', () => { S.connError = ''; render(); });
+  ws.addEventListener('open', () => {
+    reconnectAttempts = 0;
+    S.connError = '';
+    const saved = loadSession();
+    if (saved && saved.roomCode && saved.sessionToken) {
+      sendMsg({ type: 'rejoin', code: saved.roomCode, sessionToken: saved.sessionToken });
+    }
+    render();
+  });
   ws.addEventListener('message', (ev) => {
     let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
     handleMessage(msg);
   });
-  ws.addEventListener('close', () => { S.connError = 'Conexão com o servidor encerrada. Recarregue a página.'; render(); });
+  ws.addEventListener('close', () => {
+    // A conexão pode cair quando a aba vai para segundo plano ou a tela do
+    // celular bloqueia. Em vez de exigir recarregar a página, tentamos
+    // reconectar sozinhos e retomar a sessão (sala/placar/rodada) via
+    // sessionToken guardado no localStorage.
+    reconnectAttempts++;
+    S.connError = reconnectAttempts > 6
+      ? 'Não foi possível reconectar. Verifique sua internet e recarregue a página.'
+      : 'Conexão perdida. Reconectando...';
+    render();
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    const delay = Math.min(1000 * reconnectAttempts, 5000);
+    reconnectTimer = setTimeout(connect, delay);
+  });
 }
 
 function sendMsg(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-  else setState({ error: 'Sem conexão com o servidor. Recarregue a página.' });
+  else setState({ error: 'Sem conexão com o servidor. Tentando reconectar...' });
 }
 
 function setState(patch) { Object.assign(S, patch); render(); }
@@ -68,10 +109,24 @@ function handleMessage(msg) {
     case 'error': setState({ error: msg.message }); break;
     case 'room_created':
     case 'joined':
+      S.mode = msg.mode; S.roomCode = msg.code; S.sessionToken = msg.sessionToken;
+      if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
+      else { S.playerId = msg.playerId; }
+      saveSession();
+      setState({ screen: 'lobby', error: '' });
+      break;
+    case 'rejoin_ok':
       S.mode = msg.mode; S.roomCode = msg.code;
       if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
       else { S.playerId = msg.playerId; }
-      setState({ screen: 'lobby', error: '' });
+      S.screen = msg.status === 'lobby' ? 'lobby' : (msg.status === 'playing' ? 'game' : 'finished');
+      S.error = ''; S.connError = '';
+      render();
+      break;
+    case 'rejoin_failed':
+      // A sessão salva não existe mais no servidor (sala expirou, processo
+      // reiniciou etc.). Limpa e deixa a pessoa voltar pela tela inicial.
+      clearSession();
       break;
     case 'lookup_result':
       if (!msg.found) { setState({ error: 'Partida não encontrada. Confira o código.' }); return; }
@@ -142,9 +197,10 @@ function actionReady() { sendMsg({ type: 'ready' }); }
 function copyCode() { if (navigator.clipboard) navigator.clipboard.writeText(S.roomCode); }
 
 function resetToHome() {
+  clearSession();
   S = Object.assign(S, {
     screen: 'home', error: '', roomCode: null, mode: null, coupleId: null, playerIndex: null, playerId: null,
-    lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
+    sessionToken: null, lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
     groupFlavor: 'galera', themeId: 'aleatorio', rankingMode: false, tensionMode: false, questionCount: 20,
     customMode: false, customText: '', joinStep: 'code', joinCodeInput: '', joinLobby: null, joinTarget: null,
   });
@@ -202,10 +258,17 @@ function genderPicker() {
 }
 
 function questionCountPicker() {
+  let options = QUESTION_COUNTS;
+  if (S.themeId !== 'aleatorio') {
+    const theme = (S.themesCatalog || []).find((t) => t.id === S.themeId);
+    const max = theme ? theme.total : 25;
+    options = [Math.min(20, max), max].filter((n, i, arr) => arr.indexOf(n) === i);
+    if (S.questionCount > max || !options.includes(S.questionCount)) S.questionCount = max;
+  }
   return `
     <label class="field-label">Quantidade de perguntas</label>
     <div class="chip-row">
-      ${QUESTION_COUNTS.map((n) => `<div class="chip ${S.questionCount === n ? 'selected' : ''}" onclick="setState({questionCount:${n}})">${n}</div>`).join('')}
+      ${options.map((n) => `<div class="chip ${S.questionCount === n ? 'selected' : ''}" onclick="setState({questionCount:${n}})">${n}${S.themeId !== 'aleatorio' && n === options[options.length - 1] ? ' (todas)' : ''}</div>`).join('')}
     </div>
   `;
 }
@@ -374,7 +437,7 @@ function screenLobby() {
     const iAmHost = lobby.hostCoupleId === S.coupleId && S.playerIndex === 0;
     const completeCount = lobby.couples.filter((c) => c.complete).length;
     const rows = lobby.couples.map((c) => {
-      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}`).join(' &nbsp;+&nbsp; ');
+      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}`).join(' &nbsp;+&nbsp; ');
       return `<div class="couple-row ${c.complete ? 'complete' : ''}"><span>${names}${c.complete ? '' : ' <span class="muted">(aguardando parceiro)</span>'}</span><span class="pill ${c.complete ? 'ok' : 'wait'}">${c.complete ? 'Completo' : 'Incompleto'}</span></div>`;
     }).join('');
     return `
@@ -392,7 +455,7 @@ function screenLobby() {
   }
 
   const iAmHost = lobby.hostId === S.playerId;
-  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}</span></div>`).join('');
+  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}</span></div>`).join('');
   return `
     ${logoBlock()}
     <div class="card">
