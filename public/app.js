@@ -435,6 +435,16 @@ function screenSetupDuelo() {
     <div class="card">
       <label class="field-label">Seu nome</label>
       <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+
+      <div class="toggle-row">
+        <span class="toggle-label">⚔️ Como funciona o Duelo? <span class="info-icon" onclick="setState({showDueloInfo: ${!S.showDueloInfo}})">?</span></span>
+      </div>
+      ${S.showDueloInfo ? `<div class="tooltip-box">
+        <b>Fase 1 — Sobre você:</b> cada jogador responde as perguntas em segredo, falando a verdade sobre si mesmo.<br><br>
+        <b>Fase 2 — Adivinhe:</b> agora é a vez de tentar acertar o que a outra pessoa respondeu em cada pergunta.<br><br>
+        No final, ganha quem acertou mais palpites sobre o parceiro(a)!
+      </div>` : ''}
+
       <label class="field-label">Quantidade de perguntas</label>
       <div class="chip-row">
         ${S.dueloCountOptions.map((n) => `<div class="chip ${S.dueloCount === n ? 'selected' : ''}" onclick="setState({dueloCount:${n}})">${n === S.dueloCountOptions[S.dueloCountOptions.length - 1] ? n + ' (todas)' : n}</div>`).join('')}
@@ -752,6 +762,7 @@ function screenGameDuelo() {
     return `
       ${logoBlock()}
       <div class="progress">FASE 1: SOBRE VOCÊ · ${i + 1} DE ${total}</div>
+      ${i === 0 ? `<div class="tooltip-box">🕵️ <b>Fase 1:</b> responda com a verdade sobre você mesmo(a). Suas respostas ficam em segredo até a Fase 2, quando a outra pessoa vai tentar adivinhá-las!</div>` : ''}
       <div class="question-card"><p>${q.text}</p></div>
       <div style="display:flex; flex-direction:column; gap:10px;">
         ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloAnswer(${i},${idx})">${opt}</div>`).join('')}
@@ -777,6 +788,7 @@ function screenGameDuelo() {
   return `
     ${logoBlock()}
     <div class="progress">FASE 2: ADIVINHE · ${i + 1} DE ${total}</div>
+    ${i === 0 ? `<div class="tooltip-box">🔮 <b>Fase 2:</b> agora tente adivinhar o que a outra pessoa respondeu em cada pergunta. Cada acerto conta ponto pra você no placar final!</div>` : ''}
     <div class="question-card"><p>O que você acha que a outra pessoa respondeu?<br><b>${q.text}</b></p></div>
     <div style="display:flex; flex-direction:column; gap:10px;">
       ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloGuess(${i},${idx})">${opt}</div>`).join('')}
