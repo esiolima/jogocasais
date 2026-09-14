@@ -13,7 +13,7 @@ const QUESTION_COUNTS = [20, 50, 75, 100];
 let ws = null;
 
 let S = {
-  screen: 'home', // home | setupDupla | setupGrupo | join | lobby | game | finished
+  screen: 'home', // home | setupDupla | setupGrupo | setupDuelo | join | lobby | game | finished
   error: '',
   connError: '',
   roomCode: null,
@@ -21,7 +21,6 @@ let S = {
   coupleId: null,
   playerIndex: null,
   playerId: null,
-  sessionToken: null,
   lobby: null,
   game: null,
   finished: null,
@@ -38,6 +37,20 @@ let S = {
   questionCount: 20,
   customMode: false,
   customText: '',
+  dueloCount: 10,
+  dueloCountOptions: [10, 20, 33],
+
+  // duelo em andamento
+  dueloQuestions: null,
+  dueloPhase: null, // 'setup' | 'guess'
+  dueloLocalIndex: 0,
+  dueloLastResult: null,
+  dueloWaiting: false,
+
+  // chat
+  chatMessages: [],
+  chatInput: '',
+  chatOpen: false,
 
   // entrar em partida
   joinStep: 'code',
@@ -46,60 +59,20 @@ let S = {
   joinTarget: null,
 };
 
-const SESSION_KEY = 'conectai_session';
-function saveSession() {
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
-      roomCode: S.roomCode, mode: S.mode, sessionToken: S.sessionToken,
-    }));
-  } catch (e) { /* localStorage indisponível (modo anônimo etc.) */ }
-}
-function loadSession() {
-  try { const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
-  catch (e) { return null; }
-}
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
-}
-
-let reconnectAttempts = 0;
-let reconnectTimer = null;
-
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
-  ws.addEventListener('open', () => {
-    reconnectAttempts = 0;
-    S.connError = '';
-    const saved = loadSession();
-    if (saved && saved.roomCode && saved.sessionToken) {
-      sendMsg({ type: 'rejoin', code: saved.roomCode, sessionToken: saved.sessionToken });
-    }
-    render();
-  });
+  ws.addEventListener('open', () => { S.connError = ''; render(); });
   ws.addEventListener('message', (ev) => {
     let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
     handleMessage(msg);
   });
-  ws.addEventListener('close', () => {
-    // A conexão pode cair quando a aba vai para segundo plano ou a tela do
-    // celular bloqueia. Em vez de exigir recarregar a página, tentamos
-    // reconectar sozinhos e retomar a sessão (sala/placar/rodada) via
-    // sessionToken guardado no localStorage.
-    reconnectAttempts++;
-    S.connError = reconnectAttempts > 6
-      ? 'Não foi possível reconectar. Verifique sua internet e recarregue a página.'
-      : 'Conexão perdida. Reconectando...';
-    render();
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    const delay = Math.min(1000 * reconnectAttempts, 5000);
-    reconnectTimer = setTimeout(connect, delay);
-  });
+  ws.addEventListener('close', () => { S.connError = 'Conexão com o servidor encerrada. Recarregue a página.'; render(); });
 }
 
 function sendMsg(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-  else setState({ error: 'Sem conexão com o servidor. Tentando reconectar...' });
+  else setState({ error: 'Sem conexão com o servidor. Recarregue a página.' });
 }
 
 function setState(patch) { Object.assign(S, patch); render(); }
@@ -109,24 +82,10 @@ function handleMessage(msg) {
     case 'error': setState({ error: msg.message }); break;
     case 'room_created':
     case 'joined':
-      S.mode = msg.mode; S.roomCode = msg.code; S.sessionToken = msg.sessionToken;
-      if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
-      else { S.playerId = msg.playerId; }
-      saveSession();
-      setState({ screen: 'lobby', error: '' });
-      break;
-    case 'rejoin_ok':
       S.mode = msg.mode; S.roomCode = msg.code;
       if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
       else { S.playerId = msg.playerId; }
-      S.screen = msg.status === 'lobby' ? 'lobby' : (msg.status === 'playing' ? 'game' : 'finished');
-      S.error = ''; S.connError = '';
-      render();
-      break;
-    case 'rejoin_failed':
-      // A sessão salva não existe mais no servidor (sala expirou, processo
-      // reiniciou etc.). Limpa e deixa a pessoa voltar pela tela inicial.
-      clearSession();
+      setState({ screen: 'lobby', error: '' });
       break;
     case 'lookup_result':
       if (!msg.found) { setState({ error: 'Partida não encontrada. Confira o código.' }); return; }
@@ -142,6 +101,30 @@ function handleMessage(msg) {
       break;
     case 'game_finished':
       S.finished = msg; S.screen = 'finished'; render();
+      break;
+    case 'duelo_setup':
+      S.dueloQuestions = msg.questions; S.dueloPhase = 'setup'; S.dueloLocalIndex = 0;
+      S.dueloWaiting = false; S.screen = 'game'; render();
+      break;
+    case 'duelo_guess_start':
+      S.dueloQuestions = msg.questions; S.dueloPhase = 'guess'; S.dueloLocalIndex = 0;
+      S.dueloWaiting = false; S.dueloLastResult = null; render();
+      break;
+    case 'duelo_guess_result':
+      S.dueloLastResult = { correct: msg.correct, actualChoice: msg.actualChoice };
+      render();
+      break;
+    case 'duelo_waiting':
+      S.dueloWaiting = true; render();
+      break;
+    case 'chat_message':
+      S.chatMessages.push(msg);
+      if (S.chatMessages.length > 100) S.chatMessages.shift();
+      render();
+      break;
+    case 'kicked':
+      alert(msg.message);
+      resetToHome();
       break;
   }
 }
@@ -177,6 +160,41 @@ function actionCreateGrupo() {
   });
 }
 
+function actionCreateDuelo() {
+  if (!S.formName.trim()) { setState({ error: 'Digite seu nome.' }); return; }
+  sendMsg({ type: 'create_room', mode: 'duelo', name: S.formName.trim(), questionCount: S.dueloCount });
+}
+
+function actionDueloAnswer(index, choice) {
+  sendMsg({ type: 'setup_answer', index, choice });
+  S.dueloLocalIndex += 1;
+  render();
+}
+
+function actionDueloGuess(index, choice) {
+  sendMsg({ type: 'guess_answer', index, choice });
+}
+
+function actionDueloNext() {
+  S.dueloLocalIndex += 1;
+  S.dueloLastResult = null;
+  render();
+}
+
+function actionSendChat() {
+  const text = S.chatInput.trim();
+  if (!text) return;
+  sendMsg({ type: 'chat_send', text });
+  S.chatInput = '';
+  render();
+}
+
+function actionLeave() {
+  if (!confirm('Tem certeza que quer sair da partida?')) return;
+  sendMsg({ type: 'leave' });
+  resetToHome();
+}
+
 function actionLookupRoom() {
   const code = S.joinCodeInput.trim().toUpperCase();
   if (code.length < 4) { setState({ error: 'Digite o código da partida.' }); return; }
@@ -197,12 +215,13 @@ function actionReady() { sendMsg({ type: 'ready' }); }
 function copyCode() { if (navigator.clipboard) navigator.clipboard.writeText(S.roomCode); }
 
 function resetToHome() {
-  clearSession();
   S = Object.assign(S, {
     screen: 'home', error: '', roomCode: null, mode: null, coupleId: null, playerIndex: null, playerId: null,
-    sessionToken: null, lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
+    lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
     groupFlavor: 'galera', themeId: 'aleatorio', rankingMode: false, tensionMode: false, questionCount: 20,
     customMode: false, customText: '', joinStep: 'code', joinCodeInput: '', joinLobby: null, joinTarget: null,
+    dueloQuestions: null, dueloPhase: null, dueloLocalIndex: 0, dueloLastResult: null, dueloWaiting: false,
+    chatMessages: [], chatInput: '', chatOpen: false,
   });
   render();
 }
@@ -210,6 +229,20 @@ function resetToHome() {
 /* ---------- Render helpers ---------- */
 
 function render() { document.getElementById('app').innerHTML = renderScreen(); }
+
+function chatPanel() {
+  const msgs = S.chatMessages.map((m) => `<div class="chat-msg"><b>${m.name}:</b> ${m.text}</div>`).join('');
+  return `
+    <div class="card chat-panel">
+      <h3 style="font-size:14px; color:var(--ink-soft); margin-bottom:8px;">💬 CHAT</h3>
+      <div class="chat-messages" id="chatMessages">${msgs || '<p class="muted" style="font-size:13px;">Nenhuma mensagem ainda.</p>'}</div>
+      <div class="chat-input-row">
+        <input type="text" value="${S.chatInput}" oninput="S.chatInput=this.value" onkeydown="if(event.key==='Enter'){actionSendChat();}" placeholder="Escreva algo...">
+        <button class="btn btn-secondary" style="width:auto; margin:0; padding:10px 16px;" onclick="actionSendChat()">Enviar</button>
+      </div>
+    </div>
+  `;
+}
 
 function logoBlock() {
   return `
@@ -226,10 +259,15 @@ function renderScreen() {
     case 'home': return screenHome();
     case 'setupDupla': return screenSetupDupla();
     case 'setupGrupo': return screenSetupGrupo();
+    case 'setupDuelo': return screenSetupDuelo();
     case 'join': return screenJoin();
     case 'lobby': return screenLobby();
-    case 'game': return S.game && S.game.mode === 'grupo' ? screenGameGrupo() : screenGameDupla();
-    case 'finished': return S.finished && S.finished.mode === 'grupo' ? screenFinishedGrupo() : screenFinishedDupla();
+    case 'game':
+      if (S.mode === 'duelo') return screenGameDuelo();
+      return S.game && S.game.mode === 'grupo' ? screenGameGrupo() : screenGameDupla();
+    case 'finished':
+      if (S.finished && S.finished.mode === 'duelo') return screenFinishedDuelo();
+      return S.finished && S.finished.mode === 'grupo' ? screenFinishedGrupo() : screenFinishedDupla();
     default: return screenHome();
   }
 }
@@ -242,8 +280,9 @@ function screenHome() {
     ${errBlock()}
     <button class="btn btn-primary" onclick="setState({screen:'setupDupla', error:''})">🤝 MODO DUPLA</button>
     <button class="btn btn-accent" onclick="setState({screen:'setupGrupo', error:''})">👨‍👩‍👧‍👦 MODO FAMÍLIA / GALERA</button>
-    <button class="btn btn-secondary" onclick="setState({screen:'join', joinStep:'code', joinCodeInput:'', error:'', formName:'', formGender:'F', joinTarget:null})">ENTRAR EM UMA PARTIDA</button>
-    <p class="muted">Modo Dupla: até 4 duplas, no estilo EU/VOCÊ.<br>Modo Família/Galera: até 6 pessoas, votação em grupo.</p>
+    <button class="btn btn-secondary" onclick="setState({screen:'setupDuelo', error:''})">⚔️ MODO DUELO (1x1)</button>
+    <button class="btn btn-ghost" onclick="setState({screen:'join', joinStep:'code', joinCodeInput:'', error:'', formName:'', formGender:'F', joinTarget:null})">ENTRAR EM UMA PARTIDA</button>
+    <p class="muted">Duelo: só vocês dois, um quiz pra ver quem conhece melhor quem.</p>
   `;
 }
 
@@ -334,7 +373,23 @@ function screenSetupDupla() {
   `;
 }
 
-/* ---------- Configuração: Modo Grupo ---------- */
+function screenSetupDuelo() {
+  return `
+    ${logoBlock()}
+    <div class="card">
+      <label class="field-label">Seu nome</label>
+      <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+      <label class="field-label">Quantidade de perguntas</label>
+      <div class="chip-row">
+        ${S.dueloCountOptions.map((n) => `<div class="chip ${S.dueloCount === n ? 'selected' : ''}" onclick="setState({dueloCount:${n}})">${n === S.dueloCountOptions[S.dueloCountOptions.length - 1] ? n + ' (todas)' : n}</div>`).join('')}
+      </div>
+      ${errBlock()}
+      <button class="btn btn-primary" onclick="actionCreateDuelo()">CRIAR PARTIDA</button>
+      <button class="btn btn-ghost" onclick="setState({screen:'home', error:''})">Voltar</button>
+      <p class="hint" style="text-align:center;">Fase 1: cada um responde sobre si mesmo, em segredo.<br>Fase 2: tentem adivinhar a resposta um do outro!</p>
+    </div>
+  `;
+}
 
 function screenSetupGrupo() {
   return `
@@ -393,7 +448,7 @@ function screenJoin() {
         Entrar como parceiro(a) de <b>&nbsp;${c.players[0].name}</b>
       </div>
     `).join('');
-    if (canNew) options += `<div class="gender-opt ${S.joinTarget === 'new' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'new'})">➕ Criar nova dupla</div>`;
+    if (canNew) options += `<div class="gender-opt ${S.joinTarget === '__new__' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'__new__'})">➕ Criar nova dupla</div>`;
     if (!options) options = `<p class="muted">Esta partida já está cheia.</p>`;
 
     return `
@@ -412,11 +467,28 @@ function screenJoin() {
     `;
   }
 
-  const full = lobby.players.length >= lobby.maxPlayers;
+  if (lobby.mode === 'grupo') {
+    const full = lobby.players.length >= lobby.maxPlayers;
+    return `
+      ${logoBlock()}
+      <div class="card">
+        <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo ${lobby.flavor === 'familia' ? 'Família' : 'Galera'}</p>
+        <label class="field-label">Seu nome</label>
+        <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+        ${full ? '<p class="muted">Esta partida já está cheia.</p>' : ''}
+        ${errBlock()}
+        <button class="btn btn-primary" ${full ? 'disabled' : ''} onclick="actionJoinRoom()">ENTRAR</button>
+        <button class="btn btn-ghost" onclick="setState({screen:'home', error:''})">Voltar</button>
+      </div>
+    `;
+  }
+
+  // duelo
+  const full = lobby.players.length >= 2;
   return `
     ${logoBlock()}
     <div class="card">
-      <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo ${lobby.flavor === 'familia' ? 'Família' : 'Galera'}</p>
+      <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo Duelo</p>
       <label class="field-label">Seu nome</label>
       <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
       ${full ? '<p class="muted">Esta partida já está cheia.</p>' : ''}
@@ -437,7 +509,7 @@ function screenLobby() {
     const iAmHost = lobby.hostCoupleId === S.coupleId && S.playerIndex === 0;
     const completeCount = lobby.couples.filter((c) => c.complete).length;
     const rows = lobby.couples.map((c) => {
-      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}`).join(' &nbsp;+&nbsp; ');
+      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}`).join(' &nbsp;+&nbsp; ');
       return `<div class="couple-row ${c.complete ? 'complete' : ''}"><span>${names}${c.complete ? '' : ' <span class="muted">(aguardando parceiro)</span>'}</span><span class="pill ${c.complete ? 'ok' : 'wait'}">${c.complete ? 'Completo' : 'Incompleto'}</span></div>`;
     }).join('');
     return `
@@ -450,26 +522,51 @@ function screenLobby() {
         ${rows}
         ${errBlock()}
         ${iAmHost ? `<button class="btn btn-primary" ${completeCount === 0 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>` : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
+        <button class="btn btn-ghost" onclick="actionLeave()">Sair da dupla</button>
       </div>
+      ${chatPanel()}
     `;
   }
 
   const iAmHost = lobby.hostId === S.playerId;
-  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}</span></div>`).join('');
+  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}</span></div>`).join('');
+
+  if (lobby.mode === 'grupo') {
+    return `
+      ${logoBlock()}
+      <div class="card">
+        <p class="muted">Compartilhe este código:</p>
+        <div class="code-box">${lobby.code}</div>
+        <button class="btn btn-secondary" onclick="copyCode()">COPIAR CÓDIGO</button>
+        <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Pessoas na sala (${lobby.players.length}/${lobby.maxPlayers}) · ${lobby.questionCount} perguntas</h3>
+        ${rows}
+        ${errBlock()}
+        ${iAmHost
+          ? `<button class="btn btn-primary" ${lobby.players.length < 3 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>
+             ${lobby.players.length < 3 ? '<p class="hint" style="text-align:center;">Mínimo de 3 pessoas para começar.</p>' : ''}`
+          : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
+        <button class="btn btn-ghost" onclick="actionLeave()">Sair da partida</button>
+      </div>
+      ${chatPanel()}
+    `;
+  }
+
+  // duelo
   return `
     ${logoBlock()}
     <div class="card">
       <p class="muted">Compartilhe este código:</p>
       <div class="code-box">${lobby.code}</div>
       <button class="btn btn-secondary" onclick="copyCode()">COPIAR CÓDIGO</button>
-      <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Pessoas na sala (${lobby.players.length}/${lobby.maxPlayers}) · ${lobby.questionCount} perguntas</h3>
+      <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Jogadores (${lobby.players.length}/2) · ${lobby.questionCount} perguntas</h3>
       ${rows}
       ${errBlock()}
       ${iAmHost
-        ? `<button class="btn btn-primary" ${lobby.players.length < 3 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>
-           ${lobby.players.length < 3 ? '<p class="hint" style="text-align:center;">Mínimo de 3 pessoas para começar.</p>' : ''}`
+        ? `<button class="btn btn-primary" ${lobby.players.length < 2 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR DUELO</button>`
         : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
+      <button class="btn btn-ghost" onclick="actionLeave()">Sair da partida</button>
     </div>
+    ${chatPanel()}
   `;
 }
 
@@ -494,6 +591,7 @@ function screenGameDupla() {
           <div class="choice-card eu" onclick="actionAnswer('EU')"><span class="avatar">${GENDER_EMOJI[g.myGender]}</span>EU</div>
           <div class="choice-card voce" onclick="actionAnswer('VOCE')"><span class="avatar">${GENDER_EMOJI[g.partnerGender]}</span>VOCÊ</div>
         </div>
+        <button class="btn btn-ghost" style="text-align:center;" onclick="actionAnswer('PULAR')">⏭️ Pular pergunta</button>
         <p class="status-banner">Quem você acha?</p>
       `;
     } else {
@@ -502,9 +600,14 @@ function screenGameDupla() {
           <div class="choice-card eu locked"><span class="avatar">${GENDER_EMOJI[g.myGender]}</span>EU</div>
           <div class="choice-card voce locked"><span class="avatar">${GENDER_EMOJI[g.partnerGender]}</span>VOCÊ</div>
         </div>
-        <p class="status-banner">Resposta registrada.<br>Aguardando ${g.partnerName}...</p>
+        <p class="status-banner">${g.myAnswer === 'PULAR' ? 'Você pulou essa pergunta.' : 'Resposta registrada.'}<br>Aguardando ${g.partnerName}...</p>
       `;
     }
+  } else if (g.skipped) {
+    body = `
+      <div class="result-banner nomatch">⏭️ Pergunta pulada — ninguém marca ponto.</div>
+      ${g.myReady ? `<p class="status-banner">Aguardando ${g.partnerName} confirmar...</p>` : `<button class="btn btn-primary" onclick="actionReady()">PRÓXIMA</button>`}
+    `;
   } else {
     body = `
       <div class="reveal-row">
@@ -523,6 +626,8 @@ function screenGameDupla() {
     <div class="question-card"><p>${g.questionText}</p></div>
     ${body}
     ${scoreBoardHTML(g)}
+    <button class="btn btn-ghost" onclick="actionLeave()">Sair da dupla</button>
+    ${chatPanel()}
   `;
 }
 
@@ -538,11 +643,17 @@ function screenGameGrupo() {
         <div style="margin-bottom:16px;">
           ${g.players.map((p) => `<div class="person-vote" onclick="actionVote('${p.id}')">${p.name}</div>`).join('')}
         </div>
+        <button class="btn btn-ghost" style="text-align:center;" onclick="actionVote('PULAR')">⏭️ Pular pergunta</button>
         <p class="status-banner">Escolha uma pessoa do grupo</p>
       `;
     } else {
-      body = `<p class="status-banner">Voto registrado!<br>Aguardando os outros (${g.votedCount}/${g.totalPlayers}) votarem...</p>`;
+      body = `<p class="status-banner">${g.myVote === 'PULAR' ? 'Você pulou essa pergunta.' : 'Voto registrado!'}<br>Aguardando os outros (${g.votedCount}/${g.totalPlayers}) votarem...</p>`;
     }
+  } else if (g.skipped) {
+    body = `
+      <div class="result-banner nomatch">⏭️ Pergunta pulada — ninguém marca ponto.</div>
+      ${g.myReady ? `<p class="status-banner">Aguardando os outros confirmarem... (${g.readyCount}/${g.totalPlayers})</p>` : `<button class="btn btn-primary" onclick="actionReady()">PRÓXIMA</button>`}
+    `;
   } else {
     const rows = g.tally.map((t) => `
       <div class="person-vote ${t.playerId === g.winnerId ? 'selected' : ''}">
@@ -562,6 +673,70 @@ function screenGameGrupo() {
     ${themeTag(g)}
     <div class="question-card"><p>${g.questionText}</p></div>
     ${body}
+    <button class="btn btn-ghost" onclick="actionLeave()">Sair da partida</button>
+    ${chatPanel()}
+  `;
+}
+
+/* ---------- Jogo: Modo Duelo ---------- */
+
+function screenGameDuelo() {
+  if (!S.dueloQuestions) return `${logoBlock()}<p class="muted">Carregando...</p>`;
+  const total = S.dueloQuestions.length;
+  const i = S.dueloLocalIndex;
+  const footer = `<button class="btn btn-ghost" onclick="actionLeave()">Sair da partida</button>${chatPanel()}`;
+
+  if (i >= total) {
+    return `${logoBlock()}<div class="card"><p class="muted">Aguardando o outro jogador terminar essa fase...</p></div>${footer}`;
+  }
+
+  const q = S.dueloQuestions[i];
+
+  if (S.dueloPhase === 'setup') {
+    return `
+      ${logoBlock()}
+      <div class="progress">FASE 1: SOBRE VOCÊ · ${i + 1} DE ${total}</div>
+      <div class="question-card"><p>${q.text}</p></div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloAnswer(${i},${idx})">${opt}</div>`).join('')}
+      </div>
+      ${footer}
+    `;
+  }
+
+  // guess phase
+  if (S.dueloLastResult) {
+    const r = S.dueloLastResult;
+    return `
+      ${logoBlock()}
+      <div class="progress">FASE 2: ADIVINHE · ${i + 1} DE ${total}</div>
+      <div class="question-card"><p>${q.text}</p></div>
+      <div class="result-banner ${r.correct ? 'match' : 'nomatch'}">${r.correct ? 'Você acertou! 🎉' : 'Não foi dessa vez!'}</div>
+      <p class="status-banner">A resposta real foi: <b>${q.options[r.actualChoice]}</b></p>
+      <button class="btn btn-primary" onclick="actionDueloNext()">PRÓXIMA</button>
+      ${footer}
+    `;
+  }
+
+  return `
+    ${logoBlock()}
+    <div class="progress">FASE 2: ADIVINHE · ${i + 1} DE ${total}</div>
+    <div class="question-card"><p>O que você acha que a outra pessoa respondeu?<br><b>${q.text}</b></p></div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloGuess(${i},${idx})">${opt}</div>`).join('')}
+    </div>
+    ${footer}
+  `;
+}
+
+function screenFinishedDuelo() {
+  const f = S.finished;
+  return `
+    ${logoBlock()}
+    <h2 style="text-align:center; color:var(--green-dark); margin-bottom:16px;">RESULTADO DO DUELO</h2>
+    ${f.tie ? `<div class="champion-banner">Empate! Vocês se conhecem igualzinho bem. 🤝</div>` : `<div class="champion-banner">${f.winnerName} venceu o duelo! 🏆</div>`}
+    ${f.scores.map((s) => `<div class="final-rank"><span class="medal">🎯</span><span class="names">${s.name}</span><span class="score">${s.score}/${f.total}</span></div>`).join('')}
+    <div class="top-link"><a href="#" onclick="resetToHome(); return false;">Jogar uma nova partida</a></div>
   `;
 }
 
@@ -586,7 +761,7 @@ function screenFinishedGrupo() {
   const f = S.finished;
   const cards = f.report.map((p) => `
     <div class="report-card">
-      <div class="name">${p.name}</div>
+      <div class="name">${p.name} <span class="muted" style="font-size:12px; font-weight:700;">(citado(a) em ${p.count} pergunta${p.count === 1 ? '' : 's'})</span></div>
       ${p.titles.length ? `<ul>${p.titles.map((t) => `<li>${t}</li>`).join('')}</ul>` : '<p class="none">Nenhum título nesta partida.</p>'}
     </div>
   `).join('');
@@ -603,7 +778,11 @@ function screenFinishedGrupo() {
 
 fetch('/api/themes').then((r) => r.json()).then((data) => {
   S.themesCatalog = data.themes;
-  if (S.screen === 'setupDupla') render();
+  if (Array.isArray(data.dueloCountOptions) && data.dueloCountOptions.length) {
+    S.dueloCountOptions = data.dueloCountOptions;
+    S.dueloCount = data.dueloCountOptions[0];
+  }
+  if (S.screen === 'setupDupla' || S.screen === 'setupDuelo') render();
 }).catch(() => { S.themesCatalog = []; });
 
 connect();

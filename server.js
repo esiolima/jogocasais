@@ -12,11 +12,13 @@ const wss = new WebSocket.Server({ server });
 
 const THEMES = JSON.parse(fs.readFileSync(path.join(__dirname, 'themes.json'), 'utf8'));
 const FAMILIA = JSON.parse(fs.readFileSync(path.join(__dirname, 'familia.json'), 'utf8'));
+const QUIZ = JSON.parse(fs.readFileSync(path.join(__dirname, 'quiz.json'), 'utf8'));
 
 const MAX_COUPLES = 4;
 const MAX_GROUP_PLAYERS = 6;
 const MIN_GROUP_PLAYERS = 3;
 const QUESTION_COUNT_OPTIONS = [20, 50, 75, 100];
+const DUELO_COUNT_OPTIONS = [10, 20, QUIZ.length];
 
 const RELATIONSHIP_LABELS = {
   casal: { label: 'Casal', article: 'o', suffix: 'o' },
@@ -109,7 +111,7 @@ function lobbyPayloadDupla(room) {
     questionCount: room.questions.length,
     couples: room.couples.map((c) => ({
       id: c.id,
-      players: c.players.map((p) => ({ name: p.name, gender: p.gender, disconnected: !!p.disconnected })),
+      players: c.players.map((p) => ({ name: p.name, gender: p.gender })),
       complete: c.players.length === 2,
     })),
   };
@@ -136,14 +138,15 @@ function gamePayloadForDupla(room, couple, playerIndex) {
   const myAnswer = couple.answers[playerIndex];
   const partnerAnswer = couple.answers[partnerIndex];
   const revealed = myAnswer !== null && partnerAnswer !== null;
+  const skipped = revealed && (myAnswer === 'PULAR' || partnerAnswer === 'PULAR');
 
   return {
     type: 'game_state', mode: 'dupla', incomplete: false,
     questionIndex: room.currentIndex, totalQuestions: room.questions.length,
     questionText: q.text, themeName: q.themeName, themeIcon: q.themeIcon, questionValue: q.value,
     myGender: me.gender, partnerGender: partner.gender, partnerName: partner.name,
-    myAnswer, partnerAnswer: revealed ? partnerAnswer : null, revealed,
-    match: revealed ? myAnswer !== partnerAnswer : null,
+    myAnswer, partnerAnswer: revealed ? partnerAnswer : null, revealed, skipped,
+    match: revealed && !skipped ? myAnswer !== partnerAnswer : null,
     myReady: couple.ready[playerIndex], partnerReady: couple.ready[partnerIndex],
     score: couple.score, scoreboard: scoreboardForDupla(room, couple.id),
   };
@@ -205,7 +208,7 @@ function lobbyPayloadGrupo(room) {
   return {
     type: 'lobby_state', mode: 'grupo', code: room.code, flavor: room.flavor,
     maxPlayers: room.maxPlayers, hostId: room.hostId, questionCount: room.questions.length,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, disconnected: !!p.disconnected })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name })),
   };
 }
 
@@ -222,10 +225,10 @@ function gamePayloadForGrupo(room, myId) {
   const myReady = round.ready[myId] || false;
 
   let tally = null;
-  if (allVoted) {
+  if (allVoted && !round.skipped) {
     const counts = {};
     room.players.forEach((p) => { counts[p.id] = 0; });
-    Object.values(round.votes).forEach((targetId) => { counts[targetId] = (counts[targetId] || 0) + 1; });
+    Object.values(round.votes).forEach((targetId) => { if (targetId !== 'PULAR') counts[targetId] = (counts[targetId] || 0) + 1; });
     tally = room.players.map((p) => ({ playerId: p.id, name: p.name, votes: counts[p.id] || 0 })).sort((a, b) => b.votes - a.votes);
   }
 
@@ -234,8 +237,8 @@ function gamePayloadForGrupo(room, myId) {
     questionIndex: room.currentIndex, totalQuestions: room.questions.length,
     questionText: q.text, themeName: q.themeName, themeIcon: q.themeIcon,
     players: room.players.map((p) => ({ id: p.id, name: p.name })),
-    myVote: myVote || null, allVoted, tally,
-    winnerId: round.winnerId, tie: allVoted && round.winnerId === null,
+    myVote: myVote || null, allVoted, tally, skipped: round.skipped,
+    winnerId: round.winnerId, tie: allVoted && !round.skipped && round.winnerId === null,
     myReady, readyCount: Object.values(round.ready).filter(Boolean).length, totalPlayers: room.players.length,
     votedCount: Object.keys(round.votes).length,
   };
@@ -254,7 +257,7 @@ function finishedPayloadGrupo(room) {
   const flavorLabel = room.flavor === 'familia' ? 'Família' : 'Galera';
   return {
     type: 'game_finished', mode: 'grupo', flavorLabel,
-    report: room.players.map((p) => ({ name: p.name, titles: titlesByPlayer[p.id] })),
+    report: room.players.map((p) => ({ name: p.name, count: titlesByPlayer[p.id].length, titles: titlesByPlayer[p.id] })),
   };
 }
 
@@ -272,12 +275,68 @@ function maybeAdvanceGrupo(room) {
     room.status = 'finished';
     broadcastFinishedGrupo(room);
   } else {
-    room.rounds[room.currentIndex] = { votes: {}, ready: {}, winnerId: null };
+    room.rounds[room.currentIndex] = { votes: {}, ready: {}, winnerId: null, skipped: false };
     broadcastGameGrupo(room);
   }
 }
 
-/* ================== CONEXÃO WEBSOCKET ================== */
+/* ================== CHAT (todos os modos) ================== */
+
+function allSocketsInRoom(room) {
+  if (room.mode === 'dupla') return room.couples.flatMap((c) => c.players);
+  if (room.mode === 'grupo') return room.players;
+  return room.players; // duelo
+}
+
+function broadcastChat(room, name, text) {
+  const payload = { type: 'chat_message', name, text, ts: Date.now() };
+  allSocketsInRoom(room).forEach((p) => send(p.ws, payload));
+}
+
+/* ================== MODO DUELO (1x1) ================== */
+
+function pickDueloQuestions(count) {
+  const n = Math.min(count, QUIZ.length);
+  return shuffle(QUIZ.map((q, i) => i)).slice(0, n).map((i) => ({ text: QUIZ[i].text, options: QUIZ[i].options }));
+}
+
+function lobbyPayloadDuelo(room) {
+  return {
+    type: 'lobby_state', mode: 'duelo', code: room.code, hostId: room.hostId,
+    questionCount: room.questions.length,
+    players: room.players.map((p) => ({ id: p.id, name: p.name })),
+  };
+}
+
+function broadcastLobbyDuelo(room) {
+  const payload = lobbyPayloadDuelo(room);
+  room.players.forEach((p) => send(p.ws, payload));
+}
+
+function startDueloSetup(room) {
+  room.phase = 'setup';
+  const payload = { type: 'duelo_setup', questions: room.questions, totalQuestions: room.questions.length };
+  room.players.forEach((p) => send(p.ws, payload));
+}
+
+function startDueloGuess(room) {
+  room.phase = 'guess';
+  const payload = { type: 'duelo_guess_start', questions: room.questions.map((q) => ({ text: q.text, options: q.options })), totalQuestions: room.questions.length };
+  room.players.forEach((p) => send(p.ws, payload));
+}
+
+function finishDuelo(room) {
+  room.status = 'finished';
+  const s0 = room.scores[0];
+  const s1 = room.scores[1];
+  const scores = room.players.map((p, i) => ({ name: p.name, score: room.scores[i] }));
+  const tie = s0 === s1;
+  const winnerName = tie ? null : (s0 > s1 ? room.players[0].name : room.players[1].name);
+  const payload = { type: 'game_finished', mode: 'duelo', scores, total: room.questions.length, tie, winnerName };
+  room.players.forEach((p) => send(p.ws, payload));
+}
+
+
 
 wss.on('connection', (ws) => {
   ws.isAlive = true;
@@ -290,7 +349,7 @@ wss.on('connection', (ws) => {
     if (msg.type === 'create_room') {
       const name = (msg.name || '').trim().slice(0, 30);
       if (!name) return send(ws, { type: 'error', message: 'Digite seu nome.' });
-      const mode = msg.mode === 'grupo' ? 'grupo' : 'dupla';
+      const mode = (msg.mode === 'grupo' || msg.mode === 'duelo') ? msg.mode : 'dupla';
       const questionCount = Number.isInteger(msg.questionCount) && msg.questionCount > 0 && msg.questionCount <= 400 ? msg.questionCount : 20;
       const customQuestions = Array.isArray(msg.customQuestions)
         ? msg.customQuestions.map((q) => String(q).trim()).filter(Boolean).slice(0, 200) : null;
@@ -306,32 +365,45 @@ wss.on('connection', (ws) => {
         const questions = buildDuplaQuestionSet({ themeId, rankingMode, tensionMode, questionCount, customQuestions });
 
         const playerId = uid();
-        const sessionToken = uid() + uid();
-        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
         const room = {
           mode, code, maxCouples: MAX_COUPLES, relationshipType, themeId, rankingMode, tensionMode,
           couples: [couple], questions, currentIndex: 0, status: 'lobby', hostCoupleId: couple.id,
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0, sessionToken });
+        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0 });
         broadcastLobbyDupla(room);
-      } else {
+      } else if (mode === 'grupo') {
         const flavor = msg.flavor === 'familia' ? 'familia' : 'galera';
         const tensionMode = !!msg.tensionMode;
         const questions = buildGrupoQuestionSet({ tensionMode, questionCount, customQuestions });
         const playerId = uid();
-        const sessionToken = uid() + uid();
         const room = {
           mode, code, flavor, tensionMode, maxPlayers: MAX_GROUP_PLAYERS,
-          players: [{ id: playerId, name, ws, sessionToken }],
+          players: [{ id: playerId, name, ws }],
           questions, currentIndex: 0, status: 'lobby', hostId: playerId,
-          rounds: [{ votes: {}, ready: {}, winnerId: null }],
+          rounds: [{ votes: {}, ready: {}, winnerId: null, skipped: false }],
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'room_created', mode, code, playerId, sessionToken });
+        send(ws, { type: 'room_created', mode, code, playerId });
         broadcastLobbyGrupo(room);
+      } else {
+        // duelo (1x1)
+        const dueloCount = DUELO_COUNT_OPTIONS.includes(msg.questionCount) ? msg.questionCount : DUELO_COUNT_OPTIONS[0];
+        const questions = pickDueloQuestions(dueloCount);
+        const playerId = uid();
+        const room = {
+          mode: 'duelo', code, players: [{ id: playerId, name, ws }],
+          questions, status: 'lobby', phase: 'lobby', hostId: playerId,
+          setupAnswers: [[], []], setupDoneCount: [0, 0],
+          scores: [0, 0], guessDoneCount: [0, 0],
+        };
+        rooms.set(code, room);
+        ws.roomCode = code; ws.playerId = playerId;
+        send(ws, { type: 'room_created', mode: 'duelo', code, playerId });
+        broadcastLobbyDuelo(room);
       }
       return;
     }
@@ -340,8 +412,8 @@ wss.on('connection', (ws) => {
       const room = rooms.get((msg.code || '').toUpperCase());
       if (!room) return send(ws, { type: 'lookup_result', found: false });
       if (room.status !== 'lobby') return send(ws, { type: 'lookup_result', found: true, started: true });
-      const payload = room.mode === 'dupla' ? lobbyPayloadDupla(room) : lobbyPayloadGrupo(room);
-      send(ws, Object.assign(payload, { type: 'lookup_result', found: true, started: false }));
+      const payload = room.mode === 'dupla' ? lobbyPayloadDupla(room) : room.mode === 'grupo' ? lobbyPayloadGrupo(room) : lobbyPayloadDuelo(room);
+      send(ws, Object.assign({ type: 'lookup_result', found: true, started: false }, payload));
       return;
     }
 
@@ -356,62 +428,34 @@ wss.on('connection', (ws) => {
       if (room.mode === 'dupla') {
         const gender = msg.gender === 'M' ? 'M' : 'F';
         const playerId = uid();
-        const sessionToken = uid() + uid();
         if (msg.target === 'new') {
           if (room.couples.length >= room.maxCouples) return send(ws, { type: 'error', message: 'Esta partida já está cheia (4 duplas).' });
-          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
           room.couples.push(couple);
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0, sessionToken });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0 });
         } else {
           const couple = room.couples.find((c) => c.id === msg.target);
           if (!couple || couple.players.length >= 2) return send(ws, { type: 'error', message: 'Essa vaga já foi preenchida.' });
-          couple.players.push({ id: playerId, name, gender, ws, sessionToken });
+          couple.players.push({ id: playerId, name, gender, ws });
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 1;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1, sessionToken });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1 });
         }
         broadcastLobbyDupla(room);
-      } else {
+      } else if (room.mode === 'grupo') {
         if (room.players.length >= room.maxPlayers) return send(ws, { type: 'error', message: `Esta partida já está cheia (${room.maxPlayers} pessoas).` });
         const playerId = uid();
-        const sessionToken = uid() + uid();
-        room.players.push({ id: playerId, name, ws, sessionToken });
+        room.players.push({ id: playerId, name, ws });
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'joined', mode: 'grupo', code, playerId, sessionToken });
+        send(ws, { type: 'joined', mode: 'grupo', code, playerId });
         broadcastLobbyGrupo(room);
-      }
-      return;
-    }
-
-    if (msg.type === 'rejoin') {
-      const code = (msg.code || '').toUpperCase();
-      const room = rooms.get(code);
-      const token = msg.sessionToken;
-      if (!room || !token) return send(ws, { type: 'rejoin_failed' });
-
-      if (room.mode === 'dupla') {
-        let foundCouple = null; let foundIdx = -1;
-        for (const c of room.couples) {
-          const idx = c.players.findIndex((p) => p.sessionToken === token);
-          if (idx !== -1) { foundCouple = c; foundIdx = idx; break; }
-        }
-        if (!foundCouple) return send(ws, { type: 'rejoin_failed' });
-        foundCouple.players[foundIdx].ws = ws;
-        foundCouple.players[foundIdx].disconnected = false;
-        ws.roomCode = code; ws.coupleId = foundCouple.id; ws.playerIndex = foundIdx;
-        send(ws, { type: 'rejoin_ok', mode: 'dupla', code, coupleId: foundCouple.id, playerIndex: foundIdx, status: room.status });
-        if (room.status === 'lobby') { send(ws, lobbyPayloadDupla(room)); broadcastLobbyDupla(room); }
-        else if (room.status === 'playing') send(ws, gamePayloadForDupla(room, foundCouple, foundIdx));
-        else send(ws, finishedPayloadDupla(room));
       } else {
-        const p = room.players.find((pl) => pl.sessionToken === token);
-        if (!p) return send(ws, { type: 'rejoin_failed' });
-        p.ws = ws; p.disconnected = false;
-        ws.roomCode = code; ws.playerId = p.id;
-        send(ws, { type: 'rejoin_ok', mode: 'grupo', code, playerId: p.id, status: room.status });
-        if (room.status === 'lobby') { send(ws, lobbyPayloadGrupo(room)); broadcastLobbyGrupo(room); }
-        else if (room.status === 'playing') send(ws, gamePayloadForGrupo(room, p.id));
-        else send(ws, finishedPayloadGrupo(room));
+        if (room.players.length >= 2) return send(ws, { type: 'error', message: 'Esta partida já está cheia (2 pessoas).' });
+        const playerId = uid();
+        room.players.push({ id: playerId, name, ws });
+        ws.roomCode = code; ws.playerId = playerId;
+        send(ws, { type: 'joined', mode: 'duelo', code, playerId });
+        broadcastLobbyDuelo(room);
       }
       return;
     }
@@ -424,11 +468,16 @@ wss.on('connection', (ws) => {
         if (room.couples.filter((c) => c.players.length === 2).length === 0) return send(ws, { type: 'error', message: 'Pelo menos uma dupla precisa estar completa.' });
         room.status = 'playing'; room.currentIndex = 0;
         broadcastGameDupla(room);
-      } else {
+      } else if (room.mode === 'grupo') {
         if (room.hostId !== ws.playerId) return send(ws, { type: 'error', message: 'Só quem criou a sala pode iniciar.' });
         if (room.players.length < MIN_GROUP_PLAYERS) return send(ws, { type: 'error', message: `São necessárias pelo menos ${MIN_GROUP_PLAYERS} pessoas para começar.` });
         room.status = 'playing'; room.currentIndex = 0;
         broadcastGameGrupo(room);
+      } else {
+        if (room.hostId !== ws.playerId) return send(ws, { type: 'error', message: 'Só quem criou a sala pode iniciar.' });
+        if (room.players.length < 2) return send(ws, { type: 'error', message: 'São necessárias 2 pessoas para começar.' });
+        room.status = 'playing';
+        startDueloSetup(room);
       }
       return;
     }
@@ -439,11 +488,12 @@ wss.on('connection', (ws) => {
       const couple = room.couples.find((c) => c.id === ws.coupleId);
       if (!couple || couple.players.length < 2) return;
       if (couple.answers[ws.playerIndex] !== null) return;
-      if (msg.choice !== 'EU' && msg.choice !== 'VOCE') return;
+      if (msg.choice !== 'EU' && msg.choice !== 'VOCE' && msg.choice !== 'PULAR') return;
 
       couple.answers[ws.playerIndex] = msg.choice;
       if (couple.answers[0] !== null && couple.answers[1] !== null && !couple.roundScored) {
-        if (couple.answers[0] !== couple.answers[1]) couple.score += room.questions[room.currentIndex].value;
+        const skipped = couple.answers[0] === 'PULAR' || couple.answers[1] === 'PULAR';
+        if (!skipped && couple.answers[0] !== couple.answers[1]) couple.score += room.questions[room.currentIndex].value;
         couple.roundScored = true;
         if (room.currentIndex === room.questions.length - 1) couple.finalAnswerAt = Date.now();
       }
@@ -456,16 +506,21 @@ wss.on('connection', (ws) => {
       if (!room || room.mode !== 'grupo' || room.status !== 'playing') return;
       const round = room.rounds[room.currentIndex];
       if (round.votes[ws.playerId] !== undefined) return;
-      if (!room.players.some((p) => p.id === msg.targetId)) return;
+      if (msg.targetId !== 'PULAR' && !room.players.some((p) => p.id === msg.targetId)) return;
       round.votes[ws.playerId] = msg.targetId;
 
       const allVoted = room.players.every((p) => round.votes[p.id] !== undefined);
-      if (allVoted && round.winnerId === null) {
-        const counts = {};
-        Object.values(round.votes).forEach((t) => { counts[t] = (counts[t] || 0) + 1; });
-        const max = Math.max(...Object.values(counts));
-        const topIds = Object.keys(counts).filter((id) => counts[id] === max);
-        round.winnerId = topIds.length === 1 ? topIds[0] : null;
+      if (allVoted && round.winnerId === null && !round.skipped) {
+        const voteValues = Object.values(round.votes);
+        if (voteValues.some((v) => v === 'PULAR')) {
+          round.skipped = true;
+        } else {
+          const counts = {};
+          voteValues.forEach((t) => { counts[t] = (counts[t] || 0) + 1; });
+          const max = Math.max(...Object.values(counts));
+          const topIds = Object.keys(counts).filter((id) => counts[id] === max);
+          round.winnerId = topIds.length === 1 ? topIds[0] : null;
+        }
       }
       broadcastGameGrupo(room);
       return;
@@ -480,11 +535,97 @@ wss.on('connection', (ws) => {
         couple.ready[ws.playerIndex] = true;
         broadcastGameDupla(room);
         maybeAdvanceDupla(room);
-      } else {
+      } else if (room.mode === 'grupo') {
         const round = room.rounds[room.currentIndex];
         round.ready[ws.playerId] = true;
         broadcastGameGrupo(room);
         maybeAdvanceGrupo(room);
+      }
+      return;
+    }
+
+    if (msg.type === 'setup_answer') {
+      const room = rooms.get(ws.roomCode);
+      if (!room || room.mode !== 'duelo' || room.phase !== 'setup') return;
+      const myIdx = room.players.findIndex((p) => p.id === ws.playerId);
+      if (myIdx === -1) return;
+      if (!Number.isInteger(msg.index) || msg.index < 0 || msg.index >= room.questions.length) return;
+      if (room.setupAnswers[myIdx][msg.index] !== undefined) return; // não permite alterar
+      if (!Number.isInteger(msg.choice)) return;
+      room.setupAnswers[myIdx][msg.index] = msg.choice;
+
+      const done = room.setupAnswers[myIdx].filter((a) => a !== undefined).length;
+      if (done >= room.questions.length) {
+        room.setupDoneCount[myIdx] = 1;
+        if (room.setupDoneCount[0] && room.setupDoneCount[1]) startDueloGuess(room);
+        else send(ws, { type: 'duelo_waiting', phase: 'setup' });
+      }
+      return;
+    }
+
+    if (msg.type === 'guess_answer') {
+      const room = rooms.get(ws.roomCode);
+      if (!room || room.mode !== 'duelo' || room.phase !== 'guess') return;
+      const myIdx = room.players.findIndex((p) => p.id === ws.playerId);
+      if (myIdx === -1) return;
+      const otherIdx = 1 - myIdx;
+      if (!Number.isInteger(msg.index) || msg.index < 0 || msg.index >= room.questions.length) return;
+      if (!room.guesses) room.guesses = [[], []];
+      if (room.guesses[myIdx][msg.index] !== undefined) return;
+      if (!Number.isInteger(msg.choice)) return;
+      room.guesses[myIdx][msg.index] = msg.choice;
+
+      const actualChoice = room.setupAnswers[otherIdx][msg.index];
+      const correct = actualChoice === msg.choice;
+      if (correct) room.scores[myIdx] += 1;
+      send(ws, { type: 'duelo_guess_result', index: msg.index, correct, actualChoice });
+
+      const doneCount = room.guesses[myIdx].filter((a) => a !== undefined).length;
+      if (doneCount >= room.questions.length) {
+        room.guessDoneCount[myIdx] = 1;
+        if (room.guessDoneCount[0] && room.guessDoneCount[1]) finishDuelo(room);
+        else send(ws, { type: 'duelo_waiting', phase: 'guess' });
+      }
+      return;
+    }
+
+    if (msg.type === 'chat_send') {
+      const room = rooms.get(ws.roomCode);
+      if (!room) return;
+      const text = String(msg.text || '').trim().slice(0, 300);
+      if (!text) return;
+      let senderName = 'Alguém';
+      if (room.mode === 'dupla') {
+        const couple = room.couples.find((c) => c.id === ws.coupleId);
+        if (couple) senderName = couple.players[ws.playerIndex].name;
+      } else {
+        const p = room.players.find((pl) => pl.id === ws.playerId);
+        if (p) senderName = p.name;
+      }
+      broadcastChat(room, senderName, text);
+      return;
+    }
+
+    if (msg.type === 'leave') {
+      const room = rooms.get(ws.roomCode);
+      if (!room) return;
+      if (room.mode === 'dupla') {
+        const idx = room.couples.findIndex((c) => c.id === ws.coupleId);
+        if (idx === -1) return;
+        const couple = room.couples[idx];
+        couple.players.forEach((p) => { if (p.ws !== ws) send(p.ws, { type: 'kicked', message: 'Sua dupla saiu da partida.' }); });
+        room.couples.splice(idx, 1);
+        if (room.status === 'lobby') broadcastLobbyDupla(room);
+      } else if (room.mode === 'grupo') {
+        room.players = room.players.filter((p) => p.id !== ws.playerId);
+        if (room.status === 'lobby') broadcastLobbyGrupo(room);
+      } else {
+        const idx = room.players.findIndex((p) => p.id === ws.playerId);
+        if (idx !== -1) {
+          const other = room.players[1 - idx];
+          if (other) send(other.ws, { type: 'kicked', message: 'O outro jogador saiu da partida.' });
+          room.players.splice(idx, 1);
+        }
       }
       return;
     }
@@ -497,10 +638,14 @@ wss.on('connection', (ws) => {
       const couple = room.couples.find((c) => c.id === ws.coupleId);
       if (couple) { const p = couple.players[ws.playerIndex]; if (p) p.disconnected = true; }
       if (room.status === 'lobby') broadcastLobbyDupla(room);
-    } else {
+    } else if (room.mode === 'grupo') {
       const p = room.players.find((pl) => pl.id === ws.playerId);
       if (p) p.disconnected = true;
       if (room.status === 'lobby') broadcastLobbyGrupo(room);
+    } else {
+      const p = room.players.find((pl) => pl.id === ws.playerId);
+      if (p) p.disconnected = true;
+      if (room.status === 'lobby') broadcastLobbyDuelo(room);
     }
   });
 });
@@ -520,6 +665,7 @@ app.get('/api/themes', (req, res) => {
   res.json({
     themes: THEMES.map((t) => ({ id: t.id, name: t.name, icon: t.icon, count: t.questions.length, total: t.questions.length + t.tension.length, rankingPoints: t.rankingPoints })),
     questionCountOptions: QUESTION_COUNT_OPTIONS,
+    dueloCountOptions: DUELO_COUNT_OPTIONS,
   });
 });
 

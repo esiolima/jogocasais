@@ -1,0 +1,41 @@
+[
+  { "category": "Comida", "text": "Qual sua comida favorita?", "options": ["🍕 Pizza", "🍣 Sushi", "🍔 Hambúrguer", "🍝 Massa"] },
+  { "category": "Comida", "text": "Doce ou salgado?", "options": ["🍰 Doce", "🧀 Salgado", "🍫 Os dois", "🥗 Nenhum dos dois"] },
+  { "category": "Comida", "text": "Qual bebida você escolheria num dia quente?", "options": ["🧃 Suco natural", "🥤 Refrigerante", "🍺 Cerveja", "💧 Água mesmo"] },
+  { "category": "Comida", "text": "Café da manhã ideal?", "options": ["☕ Só café", "🥐 Pão e café", "🍳 Ovos e bacon", "🥣 Cereal/frutas"] },
+  { "category": "Comida", "text": "Pimenta na comida?", "options": ["🌶️ Bem apimentado", "🙂 Um pouquinho", "😐 Prefiro sem", "🔥 Extremamente picante"] },
+
+  { "category": "Lazer", "text": "Sábado à noite ideal?", "options": ["🏠 Sofá e série", "🎉 Festa/balada", "🍽️ Jantar fora", "📖 Momento sozinho"] },
+  { "category": "Lazer", "text": "Qual tipo de filme você escolheria?", "options": ["😂 Comédia", "😱 Terror", "💥 Ação", "😢 Drama"] },
+  { "category": "Lazer", "text": "Praia ou montanha?", "options": ["🏖️ Praia", "⛰️ Montanha", "🏙️ Cidade grande", "🏕️ Camping"] },
+  { "category": "Lazer", "text": "Qual desses passatempos te atrai mais?", "options": ["🎮 Videogame", "📚 Ler", "🎸 Música/instrumento", "🏃 Exercício"] },
+  { "category": "Lazer", "text": "Viagem dos sonhos?", "options": ["🗼 Europa", "🏝️ Ilha tropical", "🗻 Aventura/trilha", "🏛️ Roteiro histórico/cultural"] },
+
+  { "category": "Personalidade", "text": "Você se considera mais...", "options": ["🌅 Matutino(a)", "🌙 Notívago(a)", "🔄 Depende do dia", "😴 Nenhum dos dois, durmo o dia todo"] },
+  { "category": "Personalidade", "text": "Em um grupo, você costuma ser...", "options": ["🎤 Quem puxa assunto", "👂 Quem escuta mais", "😅 Quem faz piada", "📋 Quem organiza tudo"] },
+  { "category": "Personalidade", "text": "Como você lida com imprevistos?", "options": ["🧘 Com calma", "😰 Fico ansioso(a)", "🗺️ Já tenho um plano B", "🤷 Vou vendo o que dá"] },
+  { "category": "Personalidade", "text": "Você é mais...", "options": ["🧩 Organizado(a)", "🌪️ Bagunceiro(a)", "⚖️ No meio-termo", "📆 Organizado(a) só às vezes"] },
+  { "category": "Personalidade", "text": "Numa discussão, você tende a...", "options": ["🗣️ Falar logo o que pensa", "🤐 Preferir esfriar a cabeça antes", "✍️ Escrever uma mensagem", "🚪 Precisar de um tempo sozinho(a)"] },
+
+  { "category": "Hipotéticas", "text": "Se ganhasse na loteria, a primeira coisa seria...", "options": ["✈️ Viajar", "🏠 Comprar uma casa", "💰 Guardar tudo", "🎁 Presentear a família"] },
+  { "category": "Hipotéticas", "text": "Se pudesse ter um superpoder, escolheria...", "options": ["🕰️ Voltar no tempo", "🦸 Voar", "🧠 Ler mentes", "👻 Ficar invisível"] },
+  { "category": "Hipotéticas", "text": "Se tivesse que morar em outro lugar, escolheria...", "options": ["🌆 Outra cidade grande", "🏞️ Uma cidade pequena", "🌍 Outro país", "🏡 Nunca sairia daqui"] },
+  { "category": "Hipotéticas", "text": "Num apocalipse zumbi, você seria...", "options": ["🔫 O(a) que luta na linha de frente", "🧠 O(a) que planeja a estratégia", "🏃 O(a) que foge primeiro", "🥫 O(a) que já tem tudo estocado"] },
+  { "category": "Hipotéticas", "text": "Se pudesse jantar com uma pessoa famosa (viva ou não), seria...", "options": ["🎨 Um artista/criativo", "🧬 Um cientista", "😂 Um comediante", "👑 Uma figura histórica"] },
+
+  { "category": "Rotina", "text": "Como você prefere começar o dia?", "options": ["🏃 Fazendo exercício", "☕ Com calma, sem pressa", "📱 Já checando o celular", "😴 Adiando o despertador"] },
+  { "category": "Rotina", "text": "Seu fim de semana ideal tem...", "options": ["📅 Planejamento", "🎲 Nada planejado", "👥 Gente por perto", "🧘 Tempo sozinho(a)"] },
+  { "category": "Rotina", "text": "Como você organiza tarefas?", "options": ["✅ Lista bem detalhada", "🧠 Tudo de cabeça", "⏰ Só na correria mesmo", "📱 Um app pra isso"] },
+  { "category": "Rotina", "text": "O que mais tira seu foco?", "options": ["📱 Celular/redes sociais", "🔊 Barulho", "🍽️ Fome", "😴 Sono"] },
+
+  { "category": "Preferências", "text": "Qual estação do ano você prefere?", "options": ["☀️ Verão", "🍂 Outono", "❄️ Inverno", "🌸 Primavera"] },
+  { "category": "Preferências", "text": "Filme ou série?", "options": ["🎬 Filme", "📺 Série", "🎭 Os dois", "🚫 Nenhum, prefiro outra coisa"] },
+  { "category": "Preferências", "text": "Qual estilo de música mais combina com você?", "options": ["🎸 Rock", "🎤 Pop", "🎷 MPB/samba", "🎧 Eletrônica"] },
+  { "category": "Preferências", "text": "Time ou individual?", "options": ["🤝 Prefiro trabalhar em equipe", "🧍 Prefiro fazer sozinho(a)", "🔄 Depende da tarefa", "🙅 Evito os dois se puder"] },
+  { "category": "Preferências", "text": "Qual dessas cores mais combina com você?", "options": ["🔴 Vermelho", "🔵 Azul", "🟢 Verde", "🟡 Amarelo"] },
+
+  { "category": "Sobre a relação", "text": "O que você mais valoriza em uma amizade/relação?", "options": ["🗣️ Comunicação", "😂 Bom humor", "🤝 Lealdade", "🎯 Objetivos parecidos"] },
+  { "category": "Sobre a relação", "text": "Como você prefere resolver um desentendimento?", "options": ["💬 Conversando na hora", "⏳ Esperando esfriar", "✍️ Por mensagem", "🤷 Deixando passar"] },
+  { "category": "Sobre a relação", "text": "O que mais te irrita nas pessoas?", "options": ["⏰ Atraso", "🤥 Falta de sinceridade", "😤 Grosseria", "📵 Ficar no celular o tempo todo"] },
+  { "category": "Sobre a relação", "text": "Qual é o seu jeito de demonstrar carinho?", "options": ["🗣️ Palavras", "🎁 Presentes/gestos", "🤗 Contato físico", "⏱️ Tempo de qualidade"] }
+]
