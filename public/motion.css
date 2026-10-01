@@ -1,0 +1,113 @@
+/* Joint animation uses only transforms and opacity; no animation of layout. */
+body{transition:background-color .65s ease}
+body[data-screen=game][data-palette="0"]{background:#e4f2e6}
+body[data-screen=game][data-palette="1"]{background:#fbedd1}
+body[data-screen=game][data-palette="2"]{background:#e9e4f7}
+body[data-screen=game][data-palette="3"]{background:#dff0f7}
+body[data-screen=game][data-palette="4"]{background:#f8e2e7}
+body[data-screen=game][data-palette="5"]{background:#e4efce}
+.mascot{--skin:#49b58d;--shade:#248c78;--belly:#cce798;--shine:#86d5a7;border:0;background:none;padding:0;filter:none!important;overflow:visible;contain:layout;cursor:pointer;-webkit-tap-highlight-color:transparent;isolation:isolate}
+.chameleon{display:block;width:100%;height:100%;overflow:visible;pointer-events:none}
+.chameleon *{transform-box:view-box}
+.actor path,.actor ellipse{transition:fill 1.25s ease,stroke 1.25s ease}
+.mood-choose,.mood-question{--skin:#4aafbf;--shade:#2b8597;--belly:#c1e8bd;--shine:#92d5d0}
+.mood-create{--skin:#79b16d;--shade:#4e8954;--belly:#e1eba9;--shine:#b6d898}
+.mood-wait{--skin:#a58acb;--shade:#7d60a8;--belly:#e1cdea;--shine:#c7afe1}
+.mood-answer{--skin:#65b991;--shade:#32836c;--belly:#dbeaa5;--shine:#a4d7ad}
+body[data-palette="1"] .mood-question{--skin:#8b97d0;--shade:#6370a5;--belly:#e0d9ee;--shine:#b6bce2}
+body[data-palette="2"] .mood-question{--skin:#68b59b;--shade:#368b78;--belly:#d4e9b5;--shine:#a4d8bc}
+body[data-palette="3"] .mood-question{--skin:#c98fac;--shade:#9e648c;--belly:#f0d0cf;--shine:#e4b6c9}
+body[data-palette="4"] .mood-question{--skin:#66abb5;--shade:#387f91;--belly:#cde4c2;--shine:#9bd0d2}
+body[data-palette="5"] .mood-question{--skin:#bd9bca;--shade:#9275ae;--belly:#e8d6ed;--shine:#d9bce2}
+.ground{fill:#234838;opacity:.12;transform-origin:167px 310px;animation:shadow-breathe 4.8s ease-in-out infinite}
+.actor{transform-origin:166px 307px;animation:body-breathe 4.8s ease-in-out infinite}
+.tail{transform-origin:141px 253px;animation:tail-swish 5.4s ease-in-out infinite}
+.head{transform-origin:178px 158px;animation:head-idle 6.4s ease-in-out infinite}
+.eye-left{transform-origin:161px 106px}.eye-right{transform-origin:217px 100px}
+.eye{animation:blink 5.7s ease-in-out infinite}.eye-right{animation-delay:.035s}
+.pupil{animation:look-around 7.4s ease-in-out infinite}
+.arm-front{transform-origin:141px 173px;animation:arm-idle 4.8s ease-in-out infinite}
+.arm-back{transform-origin:211px 172px;animation:arm-idle 4.8s -.6s ease-in-out infinite}
+.leg-front{transform-origin:143px 272px}.leg-back{transform-origin:204px 268px}
+.brow-left{transform-origin:160px 77px}.brow-right{transform-origin:215px 73px}
+.closed-eye,.mouth,.expression-lines,.tongue{opacity:0}.mouth.smile{opacity:1}
+.tongue{transform-origin:221px 142px;transform:scaleX(0)}
+.mood-welcome .grin,.mood-success .grin,.mood-result .grin{opacity:1}
+.mood-welcome .smile,.mood-success .smile,.mood-result .smile,.mood-question .smile,.mood-choose .smile,.mood-warning .smile,.mood-error .smile{opacity:0}
+.mood-question .puzzled,.mood-choose .puzzled,.mood-error .puzzled{opacity:1}
+.mood-question .head,.mood-choose .head{animation:think-head 6s ease-in-out infinite}
+.mood-question .arm-front,.mood-choose .arm-front{animation:think-hand 6s ease-in-out infinite}
+.mood-question .brow-right,.mood-choose .brow-right{transform:translateY(-6px) rotate(-9deg)}
+.mood-wait .actor{animation:waiting-body 5s ease-in-out infinite}
+.mood-wait .leg-front{animation:foot-tap 2.4s ease-in-out infinite}
+.mood-wait .pupil{animation:waiting-look 5s ease-in-out infinite}
+.mood-answer .arm-front{animation:little-wave 1.1s ease-in-out 1,arm-idle 4.8s 1.1s infinite}
+.mood-success,.mood-result{--skin:#e5b849;--shade:#c18c32;--belly:#ffe7a2;--shine:#f8d975}
+.mood-success .actor,.mood-result .actor{animation:celebrate 1.5s ease-in-out 1,body-breathe 4.8s 1.5s infinite}
+.mood-success .arm-front,.mood-result .arm-front{animation:cheer-left 1.5s ease-in-out 1,arm-idle 4.8s 1.5s infinite}
+.mood-success .arm-back,.mood-result .arm-back{animation:cheer-right 1.5s ease-in-out 1,arm-idle 4.8s 1.5s infinite}
+.mood-success .head,.mood-result .head{animation:happy-nod 1.5s ease-in-out 1,head-idle 6.4s 1.5s infinite}
+.mood-success .expression-lines{animation:accent-pop 1.5s ease-in-out 1}
+.mood-error{--skin:#78a6d4;--shade:#467caf;--belly:#c4def0;--shine:#9fc5e6}
+.mood-error .head{animation:head-no 1.2s ease-in-out 1,head-idle 6.4s 1.2s infinite}
+.mood-error .brow-left{transform:rotate(-14deg)}.mood-error .brow-right{transform:rotate(12deg)}
+.mood-warning{--skin:#ce80b2;--shade:#a65692;--belly:#f6c4da;--shine:#e5a8ce}
+.mood-warning .oh{opacity:1}.mood-warning .actor{animation:startle .85s ease-out 1,body-breathe 4.8s .85s infinite}
+.mood-warning .expression-lines{opacity:1}.mood-warning .brow{transform:translateY(-8px)}
+.mood-create .head{animation:happy-nod 6s ease-in-out infinite}
+.new-question.mood-question .actor{animation:question-arrive .85s ease-out 1,body-breathe 4.8s .85s infinite}
+.mascot[data-play=wave] .arm-front{animation:big-wave 1.8s ease-in-out 1!important}
+.mascot[data-play=wave] .head{animation:happy-nod 1.8s ease-in-out 1!important}
+.mascot[data-play=hop] .actor{animation:celebrate 1.8s ease-in-out 1!important}
+.mascot[data-play=hop] .tail{animation:tail-party 1.8s ease-in-out 1!important}
+.mascot[data-play=peek] .tongue{animation:tongue-flick 1.8s ease-in-out 1}
+.mascot[data-play=peek] .pupil{animation:look-right 1.8s ease-in-out 1}
+.mascot[data-play=dance] .actor{animation:dance 1.8s ease-in-out 1!important}
+.mascot[data-play=dance] .arm-front{animation:cheer-left 1.8s ease-in-out 1!important}
+.mascot[data-play=dance] .arm-back{animation:cheer-right 1.8s ease-in-out 1!important}
+.mascot[data-play] .grin{opacity:1}.mascot[data-play] .smile,.mascot[data-play] .puzzled{opacity:0}
+.mascot[data-mood][data-play=wave]{--skin:#61b98b;--shade:#368971;--belly:#d8eaa0;--shine:#a0d6ab}
+.mascot[data-mood][data-play=hop]{--skin:#ddb651;--shade:#b1883b;--belly:#f8e3a8;--shine:#f1d17d}
+.mascot[data-mood][data-play=peek]{--skin:#d2966d;--shade:#ac7159;--belly:#f2d5aa;--shine:#e8bb8b}
+.mascot[data-mood][data-play=dance]{--skin:#ab8bc8;--shade:#7e66a8;--belly:#e7cee6;--shine:#cbb1df}
+.intro-mascot{cursor:default}.intro-mascot .actor{animation:cover-walk 2.6s ease-in-out both}
+.intro-mascot .leg-front{animation:walk-foot .28s 0s 3 alternate ease-in-out}
+.intro-mascot .leg-back{animation:walk-foot .28s -.28s 3 alternate ease-in-out}
+.intro-mascot .head{animation:cover-look 2.6s ease-in-out both}
+.intro-mascot .arm-front{animation:cover-wave 2.6s ease-in-out both}
+.intro-mascot .grin{opacity:1}.intro-mascot .smile{opacity:0}
+@keyframes body-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.018)}}
+@keyframes shadow-breathe{0%,100%{transform:scaleX(1);opacity:.12}50%{transform:scaleX(.94);opacity:.09}}
+@keyframes tail-swish{0%,100%{transform:rotate(0)}25%{transform:rotate(7deg)}70%{transform:rotate(-5deg)}}
+@keyframes head-idle{0%,35%,100%{transform:rotate(0)}55%,72%{transform:rotate(4deg) translateY(-1px)}}
+@keyframes blink{0%,42%,46%,87%,91%,100%{transform:scaleY(1)}44%,89%{transform:scaleY(.06)}}
+@keyframes look-around{0%,25%,100%{transform:translate(0,0)}34%,48%{transform:translate(-8px,1px)}58%,75%{transform:translate(2px,-3px)}}
+@keyframes arm-idle{0%,100%{transform:rotate(-1deg)}50%{transform:rotate(4deg)}}
+@keyframes think-head{0%,100%{transform:rotate(0)}25%,65%{transform:rotate(-8deg)}}
+@keyframes think-hand{0%,100%{transform:rotate(0)}22%,65%{transform:translate(11px,0) rotate(-118deg)}}
+@keyframes waiting-body{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(3px) rotate(2deg)}}
+@keyframes foot-tap{0%,20%,40%,100%{transform:rotate(0)}10%,30%{transform:rotate(-13deg)}}
+@keyframes waiting-look{0%,40%,100%{transform:translateX(-7px)}50%,85%{transform:translateX(3px)}}
+@keyframes little-wave{0%,100%{transform:rotate(0)}30%,65%{transform:rotate(120deg)}}
+@keyframes celebrate{0%,100%{transform:translateY(0) scale(1)}12%{transform:scale(1.09,.9)}35%{transform:translateY(-24px) rotate(-6deg) scale(.95,1.06)}51%{transform:scale(1.09,.92)}70%{transform:translateY(-12px) rotate(5deg)}85%{transform:scale(1.04,.96)}}
+@keyframes cheer-left{0%,100%{transform:rotate(0)}28%,70%{transform:rotate(151deg)}47%{transform:rotate(133deg)}}
+@keyframes cheer-right{0%,100%{transform:rotate(0)}28%,70%{transform:rotate(-150deg)}47%{transform:rotate(-128deg)}}
+@keyframes happy-nod{0%,100%{transform:rotate(0)}30%{transform:rotate(-6deg) translateY(2px)}60%{transform:rotate(6deg) translateY(-2px)}}
+@keyframes accent-pop{0%,15%,90%,100%{opacity:0}25%,75%{opacity:1}}
+@keyframes head-no{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-8deg)}40%,80%{transform:rotate(6deg)}}
+@keyframes startle{0%,100%{transform:none}20%{transform:scale(1.06,.93)}48%{transform:translateY(-13px) scale(.95,1.07)}74%{transform:scale(1.05,.96)}}
+@keyframes question-arrive{0%{transform:translateX(-18px) rotate(-5deg)}35%{transform:translateX(5px) rotate(4deg)}70%{transform:translateX(-2px) rotate(-1deg)}100%{transform:none}}
+@keyframes big-wave{0%,100%{transform:rotate(0)}20%,50%,80%{transform:rotate(155deg)}35%,65%{transform:rotate(120deg)}}
+@keyframes tail-party{0%,100%{transform:rotate(0)}25%,75%{transform:rotate(19deg)}50%{transform:rotate(-13deg)}}
+@keyframes tongue-flick{0%,30%,68%,100%{opacity:0;transform:scaleX(0)}42%,55%{opacity:1;transform:scaleX(1)}}
+@keyframes look-right{0%,100%{transform:none}25%,70%{transform:translateX(4px)}}
+@keyframes dance{0%,100%{transform:none}20%,60%{transform:rotate(-9deg) translateY(-3px)}40%,80%{transform:rotate(9deg) translateY(-3px)}}
+@keyframes walk-foot{from{transform:rotate(-15deg)}to{transform:rotate(15deg)}}
+@keyframes cover-walk{0%{transform:translateX(-115px) rotate(-8deg);opacity:0}12%{opacity:1}35%{transform:translateX(0) rotate(3deg)}45%{transform:rotate(0)}68%{transform:scale(1.05,.94)}80%{transform:translateY(-20px) rotate(-4deg)}92%{transform:scale(1.05,.96)}100%{transform:none}}
+@keyframes cover-look{0%,35%,100%{transform:none}48%,62%{transform:rotate(10deg) translateY(3px)}80%{transform:rotate(-6deg)}}
+@keyframes cover-wave{0%,55%,100%{transform:none}70%,85%{transform:rotate(150deg)}77%{transform:rotate(125deg)}}
+body[data-screen=game] .mascot{width:250px;height:266px}
+@media(max-width:600px){body[data-screen=game] .stage{grid-template-columns:1fr 100px}body[data-screen=game] .stage .mascot{width:106px;height:112px}.stage .mascot{height:125px}}
+@media(prefers-reduced-motion:reduce){body{transition:none}.chameleon *{animation:none!important}.mascot[data-play] .arm-front{transform:rotate(125deg)}.new-question .actor{transform:none}}
+@media(prefers-reduced-motion:no-preference){.mascot:hover .pupil{animation:look-right 1.8s ease-in-out 1}}
+.sound-tracks{display:grid;gap:8px;margin:18px 0;padding:0;border:0}.sound-tracks legend{font-size:13px;font-weight:800;margin-bottom:10px}.sound-track{display:flex;align-items:center;gap:12px;border:1px solid #bdcec1;border-radius:12px;padding:12px;min-height:60px;cursor:pointer}.sound-track:has(input:checked){background:#e8f2df;border-color:#19634e}.sound-track input{accent-color:#19634e;width:20px;height:20px;flex-shrink:0}.sound-track strong,.sound-track small{display:block}.sound-track small{font-size:12px;color:#52665e}.audio-status{min-height:22px;font-size:12px!important;margin:8px 0!important}

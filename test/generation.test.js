@@ -37,6 +37,7 @@ test('provider errors, empty and invalid candidates fall back to original catalo
 });
 test('known paraphrases are rejected and multiple-choice options must be distinct', () => {
   assert(similar('Quem é mais organizado?','Quem é mais organizado dentro de casa?'));
+  assert(similar('Quem sente mais falta de carinho quando vocês ficam longe?', 'Quem sente mais saudade quando vocês ficam longe?'));
   assert(similar('Quem teria mais dificuldade de admitir que está errado?','Quem tem mais dificuldade de admitir que está errado?'));
   assert(!valid({text:'Qual sua opção favorita?',options:['A','A','B','C']},'duelo'));
 });

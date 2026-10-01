@@ -16,19 +16,26 @@ async function player(){
     const start=Date.now();while(Date.now()-start<4000){const i=messages.findIndex(m=>m.type===type&&predicate(m));if(i>=0)return messages.splice(i,1)[0];await new Promise(r=>setTimeout(r,5));}throw Error('Timeout: '+type);
   }};clients.push(client);return client;
 }
-test('Dupla: lookup, second pair, privacy, chat, scoring, skip and final result',async()=>{
-  const a=await player(),b=await player(),c=await player();
+test('Duplas: four-player minimum, lookup, privacy, chat, scoring, skip and final result',async()=>{
+  const a=await player(),b=await player(),c=await player(),d=await player();
   a.send({type:'create_room',mode:'dupla',name:'Ana',customQuestions:['Quem faria um bolo?','Quem escolheria a música?']});
   const room=await a.get('room_created');
   b.send({type:'lookup_room',code:room.code});assert.equal((await b.get('lookup_result')).found,true);
-  c.send({type:'join_room',code:room.code,name:'Cris',target:'new'});await c.get('joined');c.send({type:'leave'});
   b.send({type:'join_room',code:room.code,name:'Bia',target:room.coupleId});await b.get('joined');
+  a.send({type:'start_game'});assert.match((await a.get('error')).message,/4 pessoas/);
+  c.send({type:'join_room',code:room.code,name:'Cris',target:'new'});const second=await c.get('joined');
+  a.send({type:'start_game'});assert.match((await a.get('error')).message,/4 pessoas/);
+  d.send({type:'join_room',code:room.code,name:'Dani',target:second.coupleId});await d.get('joined');
   a.send({type:'chat_send',text:'Oi, dupla!'});assert.equal((await b.get('chat_message')).text,'Oi, dupla!');
   a.send({type:'start_game'});await a.get('game_state');await b.get('game_state');
   a.send({type:'answer',choice:'EU'});assert.equal((await b.get('game_state')).partnerAnswer,null);
   b.send({type:'answer',choice:'VOCE'});const result=await a.get('game_state',m=>m.revealed);assert.equal(result.score,1);assert.equal(result.match,true);
+  c.send({type:'answer',choice:'EU'});d.send({type:'answer',choice:'EU'});await c.get('game_state',m=>m.revealed);
+  c.send({type:'ready'});d.send({type:'ready'});
   a.send({type:'ready'});b.send({type:'ready'});await a.get('game_state',m=>m.questionIndex===1);
   a.send({type:'answer',choice:'PULAR'});b.send({type:'answer',choice:'EU'});assert.equal((await a.get('game_state',m=>m.questionIndex===1&&m.revealed)).skipped,true);
+  c.send({type:'answer',choice:'PULAR'});d.send({type:'answer',choice:'EU'});await c.get('game_state',m=>m.questionIndex===1&&m.revealed);
+  c.send({type:'ready'});d.send({type:'ready'});
   a.send({type:'ready'});b.send({type:'ready'});assert.equal((await a.get('game_finished')).results[0].score,1);
 });
 test('Grupo: minimum players, majority vote, tie, skip and report',async()=>{
@@ -55,16 +62,37 @@ test('Duelo: generated quiz, private setup, invalid options rejected, correct/wr
   const result=await a.get('game_finished');assert.equal(result.winnerName,'Ana');assert.deepEqual(result.scores.map(s=>s.score),[10,0]);
 });
 test('Ranking with tension retains per-theme point values in all 20 rounds',async()=>{
-  const themes=require('../themes.json'); const a=await player(),b=await player();
+  const themes=require('../themes.json'); const a=await player(),b=await player(),c=await player(),d=await player();
   a.send({type:'create_room',mode:'dupla',name:'Ana',themeId:'aleatorio',rankingMode:true,tensionMode:true,questionCount:20});
-  const room=await a.get('room_created');b.send({type:'join_room',code:room.code,name:'Bia',target:room.coupleId});await b.get('joined');a.send({type:'start_game'});
+  const room=await a.get('room_created');b.send({type:'join_room',code:room.code,name:'Bia',target:room.coupleId});await b.get('joined');
+  c.send({type:'join_room',code:room.code,name:'Cris',target:'new'});const other=await c.get('joined');
+  d.send({type:'join_room',code:room.code,name:'Dani',target:other.coupleId});await d.get('joined');a.send({type:'start_game'});
   let total=0;
   for(let i=0;i<20;i++) {
     const q=await a.get('game_state',m=>m.questionIndex===i&&!m.revealed&&m.myAnswer===null);
     const expected=themes.find(t=>t.name===q.themeName).rankingPoints;assert.equal(q.questionValue,expected);total+=expected;
     a.send({type:'answer',choice:'EU'});b.send({type:'answer',choice:'VOCE'});
     assert.equal((await a.get('game_state',m=>m.questionIndex===i&&m.revealed)).score,total);
+    c.send({type:'answer',choice:'EU'});d.send({type:'answer',choice:'EU'});await c.get('game_state',m=>m.questionIndex===i&&m.revealed);
+    c.send({type:'ready'});d.send({type:'ready'});
     a.send({type:'ready'});b.send({type:'ready'});
   }
   assert.equal((await a.get('game_finished')).results[0].score,total);
+});
+
+test('Duplas: six complete pairs / twelve people, incomplete pairs blocked and thirteenth rejected',async()=>{
+  const ps=await Promise.all(Array.from({length:13},()=>player())),a=ps[0],pairs=[];
+  a.send({type:'create_room',mode:'dupla',name:'P0',customQuestions:['Quem canta melhor?']});const room=await a.get('room_created');pairs.push(room.coupleId);
+  for(let i=1;i<12;i++){
+    ps[i].send({type:'join_room',code:room.code,name:'P'+i,target:i%2?'new-unused': 'new',...(i%2?{target:pairs.at(-1)}:{})});
+    const joined=await ps[i].get('joined');if(i%2===0)pairs.push(joined.coupleId);
+    if(i===4){a.send({type:'start_game'});assert.match((await a.get('error')).message,/Todas as duplas/);}
+  }
+  ps[12].send({type:'join_room',code:room.code,name:'Extra',target:'new'});assert.match((await ps[12].get('error')).message,/6 duplas/);
+  ps[12].send({type:'join_room',code:room.code,name:'Extra',target:pairs[0]});assert.match((await ps[12].get('error')).message,/preenchida/);
+  a.send({type:'start_game'});await Promise.all(ps.slice(0,12).map(p=>p.get('game_state')));
+  ps.slice(0,12).forEach((p,i)=>p.send({type:'answer',choice:i%2?'VOCE':'EU'}));
+  await Promise.all(ps.slice(0,12).map(p=>p.get('game_state',m=>m.revealed)));
+  ps.slice(0,12).forEach(p=>p.send({type:'ready'}));
+  const final=await a.get('game_finished');assert.equal(final.results.length,6);assert(final.results.every(r=>r.score===1));
 });

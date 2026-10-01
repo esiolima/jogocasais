@@ -19,7 +19,8 @@ const THEMES = JSON.parse(fs.readFileSync(path.join(__dirname, 'themes.json'), '
 const FAMILIA = JSON.parse(fs.readFileSync(path.join(__dirname, 'familia.json'), 'utf8'));
 const QUIZ = JSON.parse(fs.readFileSync(path.join(__dirname, 'quiz.json'), 'utf8'));
 
-const MAX_COUPLES = 4;
+const MAX_COUPLES = 6;
+const MIN_COUPLES = 2;
 const MAX_GROUP_PLAYERS = 6;
 const MIN_GROUP_PLAYERS = 3;
 const QUESTION_COUNT_OPTIONS = [20, 50, 75, 100];
@@ -118,7 +119,7 @@ function send(ws, obj) {
 
 function lobbyPayloadDupla(room) {
   return {
-    type: 'lobby_state', mode: 'dupla', code: room.code, maxCouples: room.maxCouples,
+    type: 'lobby_state', mode: 'dupla', code: room.code, maxCouples: room.maxCouples, minCouples: MIN_COUPLES,
     hostCoupleId: room.hostCoupleId, relationshipType: room.relationshipType,
     questionCount: room.questions.length,
     couples: room.couples.map((c) => ({
@@ -440,7 +441,7 @@ wss.on('connection', (ws) => {
         const gender = msg.gender === 'M' ? 'M' : 'F';
         const playerId = uid();
         if (msg.target === 'new') {
-          if (room.couples.length >= room.maxCouples) return send(ws, { type: 'error', message: 'Esta partida já está cheia (4 duplas).' });
+          if (room.couples.length >= room.maxCouples) return send(ws, { type: 'error', message: 'Esta partida já tem 6 duplas. Escolha uma vaga disponível.' });
           const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
           room.couples.push(couple);
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
@@ -476,7 +477,8 @@ wss.on('connection', (ws) => {
       if (!room || room.status !== 'lobby') return;
       if (room.mode === 'dupla') {
         if (room.hostCoupleId !== ws.coupleId || ws.playerIndex !== 0) return send(ws, { type: 'error', message: 'Só quem criou a sala pode iniciar.' });
-        if (room.couples.filter((c) => c.players.length === 2).length === 0) return send(ws, { type: 'error', message: 'Pelo menos uma dupla precisa estar completa.' });
+        if (room.couples.filter((c) => c.players.length === 2).length < MIN_COUPLES) return send(ws, { type: 'error', message: 'São necessárias pelo menos 4 pessoas, em 2 duplas completas, para começar.' });
+        if (room.couples.some((c) => c.players.length !== 2)) return send(ws, { type: 'error', message: 'Todas as duplas precisam estar completas para começar. Convide os parceiros que faltam.' });
         room.status = 'playing'; room.currentIndex = 0;
         broadcastGameDupla(room);
       } else if (room.mode === 'grupo') {

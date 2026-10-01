@@ -1,0 +1,29 @@
+[
+  {
+    "track": "jardim-de-conexoes",
+    "bpm": 100,
+    "bars": 48,
+    "duration": 115.2,
+    "peak_dbfs": -1.51,
+    "rms_dbfs": -18.78,
+    "bytes": 1844119
+  },
+  {
+    "track": "passo-de-camaleao",
+    "bpm": 112,
+    "bars": 48,
+    "duration": 102.86,
+    "peak_dbfs": -1.51,
+    "rms_dbfs": -17.59,
+    "bytes": 1646842
+  },
+  {
+    "track": "fim-de-tarde",
+    "bpm": 82,
+    "bars": 48,
+    "duration": 140.49,
+    "peak_dbfs": -1.51,
+    "rms_dbfs": -18.96,
+    "bytes": 2249116
+  }
+]

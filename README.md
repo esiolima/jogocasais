@@ -3,6 +3,8 @@
 Base: branch `V2` de `esiolima/jogocasais`, commit `c121614`.
 Preparado em 1º de outubro de 2026. Nenhuma mudança foi publicada no GitHub ou no Railway.
 
+A revisão mais recente está detalhada em [ATUALIZACAO-ANIMACAO.md](ATUALIZACAO-ANIMACAO.md): mascote articulado, troca gradual de cor, fundos por pergunta, três novas trilhas e Modo Duplas de 4 a 12 pessoas. A chamada principal passou a ser “Quem te conhece de verdade?”.
+
 ## Executar
 
 Requer Node.js com npm. Validado com Node 24.15.0.
@@ -22,10 +24,11 @@ Não fazer push automático para uma branch associada ao Railway: isso pode disp
 
 ## Experiência
 
-- Layout de duas colunas no computador e uma coluna no celular; fundos sólidos por etapa e identidade verde, creme, amarelo e lilás.
-- O mesmo camaleão acompanha início, configuração, entrada, espera, pergunta, resposta, acerto, erro, resultado e avisos. São seis poses reutilizadas com variação de cor e movimentos leves de respiração, inclinação e reação.
+- Layout de duas colunas no computador e uma coluna no celular. Durante a partida, seis fundos sólidos suaves alternam a cada pergunta, com transição de 650 ms. Respostas, placar e chat não trocam a cor da rodada.
+- Modo Duplas: de 4 a 12 pessoas, organizadas em 2 a 6 duplas. O servidor e a interface só permitem iniciar com ao menos duas duplas completas e sem parceiros faltando. Grupo e Duelo mantêm seus limites e regras.
+- Camaleão vetorial articulado único em todas as telas: olhos que piscam e olham ao redor, cabeça, braços, pernas e cauda independentes. Acerto tem preparação, salto e amortecimento; erro tem um gesto de cabeça; espera tem batida do pé. Ao tocar/clicar no mascote, ele alterna aceno, salto, língua e dança. A pele, a barriga e os realces mudam de cor em 1,25 s conforme a pose/expressão; olhos e contornos preservam suas cores. O mascote é reaproveitado entre renderizações da mesma tela.
 - Abertura de 2,6 segundos, pulável, exibida uma vez por sessão da aba. Voltar ao início não a repete. O carregamento só termina quando ilustração, catálogo e WebSocket estão prontos; após 4,5 s aparece aviso de demora e após 12 s uma opção de tentar novamente. Movimento reduzido elimina as animações e a espera cinematográfica.
-- Música original e efeitos sintetizados localmente pela Web Audio API. Iniciam desligados, com controles separados, volume e preferência salva no navegador. Áudio habilitado só começa após interação. A música pausa em abas ocultas. Não há trilha nem amostra copiada de Candy Crush; a referência foi apenas o clima lúdico.
+- Três trilhas instrumentais originais em MP3 estéreo: Jardim de conexões (1min55, bossa leve), Passo de camaleão (1min43, marimba com balanço) e Fim de tarde (2min20, piano suave). Cada arranjo tem 48 compassos, melodias com pausas, variações, baixo, acordes e percussão. São instrumentos sintetizados durante a produção; não são gravações de instrumentistas. Os arquivos somam cerca de 5,7 MB, carregam sob demanda e não atrasam a abertura. Troca de faixa com transição de aproximadamente 700 ms. Efeitos curtos continuam na Web Audio API. Música e efeitos começam desligados, têm controle separado, volume e preferência salva; pausam em abas ocultas. Nenhuma melodia ou amostra de Candy Crush foi utilizada.
 - Créditos exatos, sem duplicação, no diálogo Sobre acessível pelo cabeçalho e rodapé. O diálogo não interrompe as mensagens da partida.
 - Controles existentes receberam interação por teclado, rótulos, estados acessíveis e foco preservado durante atualizações do chat. A próxima pergunta retorna ao topo, e o zoom do navegador foi liberado.
 
@@ -70,13 +73,13 @@ A pontuação segue as mesmas regras da V2, incluindo pontos por tema e bônus d
 
 Alterados: `server.js`, `package.json`, `public/index.html`, `public/app.js`, `public/style.css`.
 
-Novos: `.gitignore`, `package-lock.json`, `public/ui.js`, `public/boot.js`, `public/sound.js`, `public/assets/chameleon-atlas.png`, `public/assets/PROVENANCE.md`, `questions/rules.js`, `questions/service.js`, `test/generation.test.js`, `test/realtime.test.js`, `test/experience.test.js` e este `README.md`.
+Novos: `.gitignore`, `package-lock.json`, `public/ui.js`, `public/boot.js`, `public/sound.js`, `public/mascot.js`, `public/motion.css`, `public/assets/music/` (três MP3 e manifesto), `public/assets/chameleon-atlas.png` (histórico), `public/assets/PROVENANCE.md`, `questions/rules.js`, `questions/service.js`, `test/generation.test.js`, `test/realtime.test.js`, `test/experience.test.js`, `tools/compose_music.py`, `ATUALIZACAO-ANIMACAO.md` e este `README.md`.
 
 Os quatro arquivos JSON de catálogo não foram alterados.
 
 ## Validação e limites
 
-12 testes automatizados passaram: 500 partidas com sementes reproduzíveis, todos os temas/tipos de dupla/tensão, rejeição de duplicatas e opções inválidas, fallback, pontuação e Ranking/Tensão em 20 rodadas, sigilo das respostas, lookup/entrada, chat, maioria, empate, pulo, resultado, abertura e controles de áudio.
+15 testes automatizados passaram: 500 partidas com sementes reproduzíveis, todos os temas/tipos de dupla/tensão, rejeição de duplicatas e opções inválidas, fallback, pontuação e Ranking/Tensão em 20 rodadas, sigilo das respostas, lookup/entrada, chat, maioria, empate, pulo, resultado, abertura, controles de áudio, troca de trilhas, fundos por rodada e limites de 4 a 12 pessoas.
 
 Teste no navegador Chromium do aplicativo, com dois ou três jogadores em abas separadas:
 

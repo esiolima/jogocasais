@@ -33,6 +33,7 @@ const Boot = (() => {
   setTimeout(() => { animationDone = true; finish(); }, seen || reduced ? 0 : 2600);
   setTimeout(() => { if (!done && !failed) status.textContent = 'A conexão está demorando um pouco. Continuamos preparando o jogo…'; }, 4500);
   setTimeout(() => { if (!done) fail('Não foi possível terminar o carregamento. Verifique sua conexão e tente novamente.'); }, 12000);
-  const image = new Image(); image.onload = () => mark('mascot'); image.onerror = () => fail('Não conseguimos carregar o mascote. Tente novamente.'); image.src = '/assets/chameleon-atlas.png';
+  if (typeof Mascot !== 'undefined') mark('mascot');
+  else fail('Não conseguimos carregar o mascote. Tente novamente.');
   return { mark, fail };
 })();

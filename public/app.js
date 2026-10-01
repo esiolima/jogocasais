@@ -257,7 +257,9 @@ function render() {
   const newRound = round && round !== lastRound;
   document.body.dataset.screen = S.screen;
   document.body.dataset.mode = S.mode || S.screen;
+  const previousMascot = root.querySelector('.mascot');
   root.innerHTML = UI.shell(S, renderScreen());
+  Mascot.mount(root, S, previousMascot);
   UI.enhance(root);
   if (S.copyStatus && S.screen === 'lobby') {
     const code = root.querySelector('.code-box');
@@ -317,7 +319,7 @@ function screenHome() {
   return `
     ${errBlock()}
     <p class="eyebrow">ESCOLHA SEU JEITO DE JOGAR</p>
-    <button class="mode-card mode-dupla" onclick="setState({screen:'setupDupla', error:''})"><span class="mode-number">01</span><span><strong>Modo Dupla</strong><small>Quem é mais provável? Testem a sintonia.</small><em>2 a 8 pessoas · até 4 duplas</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+    <button class="mode-card mode-dupla" onclick="setState({screen:'setupDupla', error:''})"><span class="mode-number">01</span><span><strong>Modo Duplas</strong><small>Quem é mais provável? Testem a sintonia.</small><em>4 a 12 pessoas · de 2 a 6 duplas</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
     <button class="mode-card mode-grupo" onclick="setState({screen:'setupGrupo', error:''})"><span class="mode-number">02</span><span><strong>Família / Galera</strong><small>Uma pergunta. Todo mundo tem um nome.</small><em>3 a 6 pessoas · votação em grupo</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
     <button class="mode-card mode-duelo" onclick="setState({screen:'setupDuelo', error:''})"><span class="mode-number">03</span><span><strong>Duelo</strong><small>Será que você adivinha minhas respostas?</small><em>2 pessoas · quiz de preferências</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
     <div class="join-invite"><span>Já recebeu um código?</span><button class="btn btn-secondary" onclick="setState({screen:'join', joinStep:'code', joinCodeInput:'', error:'', formName:'', formGender:'F', joinTarget:null})">Entrar em uma partida <span aria-hidden="true">→</span></button></div>
@@ -496,7 +498,7 @@ function screenJoin() {
     return `
       ${logoBlock()}
       <div class="card">
-        <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo Dupla</p>
+        <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo Duplas · 4 a 12 pessoas</p>
         <label class="field-label">Seu nome</label>
         <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
         ${genderPicker()}
@@ -550,6 +552,8 @@ function screenLobby() {
   if (lobby.mode === 'dupla') {
     const iAmHost = lobby.hostCoupleId === S.coupleId && S.playerIndex === 0;
     const completeCount = lobby.couples.filter((c) => c.complete).length;
+    const minCouples = lobby.minCouples || 2;
+    const readyToStart = completeCount >= minCouples && completeCount === lobby.couples.length;
     const rows = lobby.couples.map((c) => {
       const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}`).join(' &nbsp;+&nbsp; ');
       return `<div class="couple-row ${c.complete ? 'complete' : ''}"><span>${names}${c.complete ? '' : ' <span class="muted">(aguardando parceiro)</span>'}</span><span class="pill ${c.complete ? 'ok' : 'wait'}">${c.complete ? 'Completo' : 'Incompleto'}</span></div>`;
@@ -563,7 +567,8 @@ function screenLobby() {
         <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Duplas na sala (${lobby.couples.length}/${lobby.maxCouples}) · ${lobby.questionCount} pergunta${lobby.questionCount === 1 ? '' : 's'}</h3>
         ${rows}
         ${errBlock()}
-        ${iAmHost ? `<button class="btn btn-primary" ${completeCount === 0 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>` : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
+        <p class="hint">4 a 12 pessoas · de 2 a 6 duplas. ${completeCount < minCouples ? 'Formem pelo menos 2 duplas completas para começar.' : !readyToStart ? 'Falta completar as duplas que estão aguardando parceiro.' : 'Todas as duplas estão prontas!'}</p>
+        ${iAmHost ? `<button class="btn btn-primary" ${!readyToStart ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>` : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
         <button class="btn btn-ghost" onclick="actionLeave()">Sair da dupla</button>
       </div>
       ${chatPanel()}

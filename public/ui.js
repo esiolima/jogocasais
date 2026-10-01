@@ -1,20 +1,19 @@
-/* ConectAí visual system. One atlas, reusable poses; no runtime illustration service. */
+/* ConectAí visual system. One articulated character across all screens. */
 const UI = (() => {
-  const poses = { welcome: 0, choose: 1, create: 1, wait: 2, question: 1, answer: 0, success: 3, error: 4, result: 3, warning: 5 };
   const credits = 'Desenvolvido por Plínio Augusto e Esio Lima. © 2026 ConectAí. Todos os direitos reservados.';
   function mascot(mood, extra = '') {
-    return `<div class="mascot mood-${mood} ${extra}" aria-hidden="true"><div class="mascot-art pose-${poses[mood] ?? 0}"></div></div>`;
+    return Mascot.html(mood, extra);
   }
   function stage(s) {
     let mood = 'create', title = 'Do seu jeito.', eyebrow = 'PREPARE A PARTIDA', text = 'Escolha as opções e convide quem vai jogar com você.';
-    if (s.screen === 'home') { mood = 'welcome'; title = 'Quem conhece quem de verdade?'; eyebrow = 'MENOS SCROLL. MAIS CONEXÃO.'; text = 'Um palpite, uma surpresa e muita história para contar. Bora se descobrir?'; }
-    if (s.screen === 'setupDupla') { title = 'A sintonia de vocês.'; text = 'Respondam em segredo. Quando os palpites apontam para a mesma pessoa, a dupla marca pontos.'; }
+    if (s.screen === 'home') { mood = 'welcome'; title = 'Quem te conhece de verdade?'; eyebrow = 'MENOS SCROLL. MAIS CONEXÃO.'; text = 'Um palpite, uma surpresa e muita história para contar. Bora se descobrir?'; }
+    if (s.screen === 'setupDupla') { eyebrow = 'MODO DUPLAS · 4 A 12 PESSOAS'; title = 'Qual dupla tem mais sintonia?'; text = 'Formem de 2 a 6 duplas. Respondam em segredo: palpites que apontam para a mesma pessoa valem pontos para a dupla.'; }
     if (s.screen === 'setupGrupo') { title = 'Todo mundo na roda.'; text = 'De 3 a 6 pessoas. Votem em quem mais combina com cada pergunta e descubram a opinião do grupo.'; }
     if (s.screen === 'setupDuelo') { title = 'Você me conhece?'; text = 'Primeiro, cada um responde sobre si. Depois, vale adivinhar as escolhas da outra pessoa.'; }
     if (s.screen === 'join') { mood = 'choose'; eyebrow = 'JÁ TEM UM CONVITE?'; title = 'Chega mais.'; text = 'Use o código de quem criou a sala. A conexão começa aqui.'; }
     if (s.screen === 'lobby') { mood = 'wait'; eyebrow = 'SALA DE ENCONTRO'; title = 'Falta pouco!'; text = 'Compartilhe o código e espere o pessoal chegar. O chat já está liberado.'; }
     if (s.screen === 'game') {
-      mood = 'question'; eyebrow = s.mode === 'duelo' ? 'DUELO · 1 × 1' : s.mode === 'grupo' ? 'FAMÍLIA / GALERA' : 'MODO DUPLA'; title = 'Qual é seu palpite?'; text = 'Responda no seu tempo.';
+      mood = 'question'; eyebrow = s.mode === 'duelo' ? 'DUELO · 1 × 1' : s.mode === 'grupo' ? 'FAMÍLIA / GALERA' : 'MODO DUPLAS'; title = 'Qual é seu palpite?'; text = 'Responda no seu tempo.';
       const g = s.game;
       if (s.mode === 'duelo') {
         if (s.dueloLocalIndex >= (s.dueloQuestions?.length || 0)) { mood = 'wait'; title = 'Sua parte está feita.'; text = 'Aguardando a outra pessoa terminar.'; }

@@ -1,82 +1,127 @@
-/* Original procedural score for ConectAí. No samples, tracking or external service. */
+/* Original, locally hosted instrumental scores. Streamed on demand.
+ * Web Audio is used only for responsive effects; no runtime service. */
 const Sound = (() => {
-  const defaults = { music: false, effects: false, volume: .35 };
-  let prefs = { ...defaults }, context, master, musicBus, effectsBus, timer, next = 0, step = 0, unlocked = false;
-  try { const saved = JSON.parse(localStorage.getItem('conectai-sound')); if (saved) prefs = { music: saved.music === true, effects: saved.effects === true, volume: Number.isFinite(saved.volume) ? Math.max(0,Math.min(1,saved.volume)) : .35 }; } catch { /* optional persistence */ }
-  // Four original phrases, in C major; gentle toy-piano timbre at 88 bpm.
-  const melody = [76,null,79,81,79,76,74,null, 72,76,79,null,74,76,72,null,
-    77,null,81,79,77,76,72,null, 74,77,81,null,79,76,74,null,
-    74,null,77,81,84,81,77,null, 76,74,72,null,74,77,76,null,
-    79,null,83,81,79,77,74,null, 76,79,74,null,72,null,null,null];
-  const harmony = [[48,60,64,67],[53,60,65,69],[50,62,65,69],[55,62,67,71]];
-  const frequency = midi => 440 * 2 ** ((midi - 69) / 12);
-  function voice(midi, at, duration, gain, bus, type = 'sine') {
-    const osc = context.createOscillator(), envelope = context.createGain();
-    osc.type = type; osc.frequency.value = frequency(midi);
-    envelope.gain.setValueAtTime(0, at); envelope.gain.linearRampToValueAtTime(gain, at + .015);
-    envelope.gain.exponentialRampToValueAtTime(.0001, at + duration);
-    osc.connect(envelope); envelope.connect(bus); osc.start(at); osc.stop(at + duration + .03);
-    osc.onended = () => { osc.disconnect(); envelope.disconnect(); };
+  const tracks = [
+    {id:'jardim-de-conexoes',name:'Jardim de conexões',detail:'Bossa leve · cordas, piano e percussão'},
+    {id:'passo-de-camaleao',name:'Passo de camaleão',detail:'Mais brincalhona · marimba e balanço'},
+    {id:'fim-de-tarde',name:'Fim de tarde',detail:'Mais tranquila · piano e acordes suaves'}
+  ];
+  let prefs={music:false,effects:false,volume:.45,track:tracks[0].id};
+  let context,master,unlocked=false,current,retiring,fadeTimer,generation=0,message='';
+  const players=new Set();
+  try {
+    const saved=JSON.parse(localStorage.getItem('conectai-sound'));
+    if(saved)prefs={music:saved.music===true,effects:saved.effects===true,
+      volume:Number.isFinite(saved.volume)?Math.max(0,Math.min(1,saved.volume)):.45,
+      track:tracks.some(t=>t.id===saved.track)?saved.track:tracks[0].id};
+  } catch { /* optional persistence */ }
+  function status(text){message=text;const el=document.getElementById('audio-status');if(el)el.textContent=text;}
+  function discard(audio){if(!audio)return;audio.pause();audio.removeAttribute('src');audio.load();audio.remove();players.delete(audio);}
+  function stopFade(){clearInterval(fadeTimer);fadeTimer=null;discard(retiring);retiring=null;}
+  const volume=()=>prefs.volume*.65;
+  function fadeIn(audio,old){
+    stopFade();retiring=old;
+    let progress=0;const oldVolume=old?.volume||0;
+    fadeTimer=setInterval(()=>{
+      progress=Math.min(1,progress+.05);
+      audio.volume=volume()*Math.sin(progress*Math.PI/2);
+      if(old)old.volume=oldVolume*Math.cos(progress*Math.PI/2);
+      if(progress>=1)stopFade();
+    },35);
   }
-  function ensure() {
-    if (!context) {
-      const Audio = window.AudioContext || window.webkitAudioContext;
-      if (!Audio) return false;
-      context = new Audio(); master = context.createGain(); master.connect(context.destination);
-      musicBus = context.createGain(); musicBus.connect(master); effectsBus = context.createGain(); effectsBus.connect(master);
+  async function playMusic(){
+    if(!unlocked||!prefs.music||document.hidden)return;
+    if(current?.dataset.track===prefs.track){
+      if(current.paused&&!current.error){
+        try{await current.play();}catch{status('Toque em Música de fundo para tentar novamente.');}
+      }
+      return;
     }
-    if (context.state === 'suspended') context.resume().catch(() => {});
-    master.gain.setTargetAtTime(prefs.volume, context.currentTime, .03);
-    musicBus.gain.setTargetAtTime(prefs.music ? .20 : 0, context.currentTime, .06);
-    effectsBus.gain.setTargetAtTime(prefs.effects ? .24 : 0, context.currentTime, .02);
+    const token=++generation,previous=current;
+    const audio=document.createElement('audio');
+    players.add(audio);
+    audio.dataset.track=prefs.track;audio.loop=true;audio.preload='none';audio.volume=0;
+    audio.setAttribute('aria-hidden','true');audio.hidden=true;
+    audio.src='/assets/music/'+prefs.track+'.mp3';current=audio;
+    audio.addEventListener('waiting',()=>{if(current===audio)status('Carregando a trilha…');});
+    audio.addEventListener('playing',()=>{if(current===audio)status('Tocando: '+tracks.find(t=>t.id===audio.dataset.track).name);});
+    audio.addEventListener('error',()=>{if(current===audio)status('A trilha não carregou. Desligue e ligue a música para tentar novamente.');});
+    document.body.append(audio);status('Carregando a trilha…');
+    try{
+      await audio.play();
+      if(token!==generation||document.hidden||!prefs.music){discard(previous);return;}
+      fadeIn(audio,previous);
+    }catch{
+      discard(previous);
+      if(token===generation)status('Não foi possível tocar. Desligue e ligue a música para tentar novamente.');
+    }
+  }
+  function ensureEffects(){
+    if(!context){
+      const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return false;
+      context=new Audio();master=context.createGain();master.connect(context.destination);
+    }
+    if(context.state==='suspended')context.resume().catch(()=>{});
+    master.gain.setTargetAtTime(prefs.effects?prefs.volume*.24:0,context.currentTime,.025);
     return true;
   }
-  function schedule() {
-    if (!context || !prefs.music || document.hidden) return;
-    while (next < context.currentTime + .4) {
-      const note = melody[step % melody.length];
-      if (note !== null) { voice(note, next, .65, .26, musicBus, 'triangle'); voice(note + 12, next, .3, .035, musicBus); }
-      if (step % 8 === 0) {
-        const chord = harmony[Math.floor(step / 16) % 4];
-        voice(chord[0], next, 1.3, .30, musicBus);
-        chord.slice(1).forEach((n,i) => voice(n, next + .06 * i, 1.7, .10, musicBus));
-      }
-      next += 60 / 88 / 2; step++;
+  function update(){
+    if(!unlocked)return;
+    if(context)master.gain.setTargetAtTime(prefs.effects?prefs.volume*.24:0,context.currentTime,.025);
+    if(document.hidden||!prefs.music){
+      generation++;stopFade();players.forEach(audio=>audio.pause());status(document.hidden?'Música pausada nesta aba.':'Música desligada.');
+    }else{
+      if(current&&!fadeTimer)current.volume=volume();
+      playMusic();
     }
   }
-  function update() {
-    if (!unlocked || document.hidden || (!prefs.music && !prefs.effects && !context)) return;
-    if (!ensure()) return;
-    if (prefs.music && !timer) { next = context.currentTime + .05; timer = setInterval(schedule, 180); schedule(); }
-    if (!prefs.music && timer) { clearInterval(timer); timer = null; }
+  const frequency=n=>440*2**((n-69)/12);
+  function voice(note,at,duration,level,type='sine'){
+    const osc=context.createOscillator(),env=context.createGain();
+    osc.type=type;osc.frequency.setValueAtTime(frequency(note),at);
+    env.gain.setValueAtTime(0,at);env.gain.linearRampToValueAtTime(level,at+.009);
+    env.gain.exponentialRampToValueAtTime(.0001,at+duration);
+    osc.connect(env);env.connect(master);osc.start(at);osc.stop(at+duration+.03);
+    osc.onended=()=>{osc.disconnect();env.disconnect();};
   }
-  let lastCue = 0;
-  function cue(name) {
-    if (!unlocked || !prefs.effects || document.hidden || !ensure()) return;
-    if (context.currentTime - lastCue < .06) return;
-    lastCue = context.currentTime;
-    const notes = { tap: [79], answer: [72,76], success: [72,76,79,84], error: [74,72], result: [72,76,79,81,84], join: [67,72,76], warning: [72,69] }[name] || [79];
-    notes.forEach((n,i) => voice(n, context.currentTime + .015 + i * .10, name === 'tap' ? .1 : .4, name === 'tap' ? .20 : .34, effectsBus));
+  let lastCue=-1;
+  function cue(name){
+    if(!unlocked||!prefs.effects||document.hidden||!ensureEffects())return;
+    if(name==='tap'&&context.currentTime-lastCue<.055)return;
+    lastCue=context.currentTime;
+    const notes={tap:[79],answer:[72,79],success:[72,76,79,84],error:[74,72],result:[72,76,79,83,84],join:[67,72,76],warning:[72,69],mascot:[79,84,81]}[name]||[79];
+    notes.forEach((n,i)=>{
+      const at=context.currentTime+.01+i*.095;
+      voice(n,at,name==='tap'?.09:.42,name==='tap'?.17:.30);
+      if(name==='success'||name==='result')voice(n+12,at,.25,.045,'triangle');
+    });
   }
-  function set(key, value) {
-    prefs[key] = key === 'volume' ? Math.max(0,Math.min(1,Number(value))) : Boolean(value);
-    unlocked = true; update();
-    try { localStorage.setItem('conectai-sound', JSON.stringify(prefs)); } catch { /* optional */ }
-    const button = document.getElementById('sound-button'); if (button) button.textContent = label();
-    if (key === 'effects' && value) cue('success');
+  function set(key,value){
+    if(key==='track'){if(!tracks.some(t=>t.id===value))return;prefs.track=value;}
+    else if(key==='volume'){const n=Number(value);if(!Number.isFinite(n))return;prefs.volume=Math.max(0,Math.min(1,n));}
+    else if(key==='music'||key==='effects')prefs[key]=Boolean(value);else return;
+    if(key==='music'&&value&&current?.error){discard(current);current=null;}
+    unlocked=true;update();
+    try{localStorage.setItem('conectai-sound',JSON.stringify(prefs));}catch{/* optional */}
+    const button=document.getElementById('sound-button');if(button)button.textContent=label();
+    if(key==='effects'&&value)cue('success');
   }
-  function label() { return prefs.music || prefs.effects ? 'Som ligado' : 'Som desligado'; }
-  function open() {
-    const dialog = document.createElement('dialog'); dialog.setAttribute('aria-labelledby','sound-title');
-    dialog.innerHTML = `<h2 id="sound-title">Som do seu jeito</h2><p>Uma trilha leve para acompanhar a conversa.</p><label class="sound-option"><span>Música de fundo</span><input type="checkbox" ${prefs.music?'checked':''} onchange="Sound.set('music',this.checked)"></label><label class="sound-option"><span>Efeitos do jogo</span><input type="checkbox" ${prefs.effects?'checked':''} onchange="Sound.set('effects',this.checked)"></label><label class="sound-volume" for="sound-volume">Volume</label><input id="sound-volume" type="range" min="0" max="1" step=".05" value="${prefs.volume}" oninput="Sound.set('volume',this.value)"><p class="hint">A música pausa quando você sai desta aba.</p><form method="dialog"><button class="btn btn-primary">Pronto</button></form>`;
-    dialog.addEventListener('close', () => { dialog.remove(); document.getElementById('sound-button')?.focus(); });
-    document.body.append(dialog); dialog.showModal();
+  function label(){return prefs.music||prefs.effects?'Som ligado':'Som desligado';}
+  function open(){
+    if(document.getElementById('sound-dialog'))return;
+    const dialog=document.createElement('dialog');dialog.id='sound-dialog';dialog.setAttribute('aria-labelledby','sound-title');
+    dialog.innerHTML='<h2 id="sound-title">Qual é o clima?</h2><p>Três trilhas instrumentais feitas para acompanhar a brincadeira.</p>'
+      +'<label class="sound-option"><span>Música de fundo</span><input type="checkbox" '+(prefs.music?'checked':'')+' onchange="Sound.set(\'music\',this.checked)"></label>'
+      +'<fieldset class="sound-tracks"><legend>Escolha sua trilha</legend>'+tracks.map(t=>'<label class="sound-track"><input type="radio" name="music-track" value="'+t.id+'" '+(prefs.track===t.id?'checked':'')+' onchange="Sound.set(\'track\',this.value)"><span><strong>'+t.name+'</strong><small>'+t.detail+'</small></span></label>').join('')+'</fieldset>'
+      +'<p class="audio-status" id="audio-status" role="status"></p>'
+      +'<label class="sound-option"><span>Efeitos do jogo</span><input type="checkbox" '+(prefs.effects?'checked':'')+' onchange="Sound.set(\'effects\',this.checked)"></label>'
+      +'<label class="sound-volume" for="sound-volume">Volume</label><input id="sound-volume" type="range" min="0" max="1" step=".05" value="'+prefs.volume+'" oninput="Sound.set(\'volume\',this.value)">'
+      +'<p class="hint">A música pausa quando você sai desta aba.</p><form method="dialog"><button class="btn btn-primary">Pronto</button></form>';
+    dialog.addEventListener('close',()=>{dialog.remove();document.getElementById('sound-button')?.focus();});
+    document.body.append(dialog);status(message||'Ative a música para ouvir.');dialog.showModal();
   }
-  document.addEventListener('pointerdown', event => { unlocked = true; update(); if (event.target.closest('button,[role=button]')) cue('tap'); }, {passive:true});
-  document.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { unlocked = true; update(); } });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { clearInterval(timer); timer = null; context?.suspend(); }
-    else update();
-  });
-  return { set, cue, open, label };
+  document.addEventListener('pointerdown',ev=>{unlocked=true;update();if(ev.target.closest('button,[role=button]'))cue('tap');},{passive:true});
+  document.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){unlocked=true;update();}});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)context?.suspend();update();});
+  return {set,cue,open,label};
 })();

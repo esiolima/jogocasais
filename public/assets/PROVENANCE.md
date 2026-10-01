@@ -1,5 +1,13 @@
 # Camaleão do ConectAí
 
+## Revisão com articulações e novas músicas
+
+O recurso ativo agora é o desenho vetorial original definido em `../mascot.js`, animado por `../motion.css`. Foi reconstruído em código a partir das mesmas referências para separar cabeça, olhos, pupilas, cauda, braços e pernas. Não foi gerado por imagegen nesta revisão. Todas as telas usam esse mesmo desenho; o atlas abaixo está preservado como versão anterior e não é mais carregado pela interface. Os GIFs enviados pelo usuário foram consultados como referências de movimento, sem copiar seus personagens ou incorporar seus arquivos.
+
+As novas trilhas são `music/jardim-de-conexoes.mp3`, `music/passo-de-camaleao.mp3` e `music/fim-de-tarde.mp3`. Foram compostas e sintetizadas pelo script `../../tools/compose_music.py`, com NumPy, e convertidas por FFmpeg para MP3 estéreo a 128 kbps. São arranjos originais de 48 compassos, não gravações de músicos. Não há amostras nem melodias de Candy Crush, chaves, serviços ou dependências de produção novas. `music/manifest.json` contém as medidas dos arquivos. O áudio procedural de 88 BPM descrito ao fim deste documento pertence à versão anterior.
+
+## Histórico: atlas da primeira revisão
+
 Arquivo consumido: `chameleon-atlas.png` — PNG RGBA transparente, 1536×1024, aproximadamente 1,75 MB. Prancha 3×2; cada célula tem 512×512 pixels. Não requer arquivos individuais: CSS seleciona a célula pelo posicionamento do fundo.
 
 As três referências fornecidas foram examinadas. A prancha original mostrou identidade, cores, expressões e poses; o retrato ampliado confirmou contorno, crista, olhos, barriga e cauda; a terceira imagem confirmou a redação dos créditos e a grafia dos nomes. Nenhuma referência foi tratada como um conjunto de arquivos individuais já recortados.

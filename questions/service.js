@@ -2,7 +2,11 @@
 const rules = require('./rules');
 const normalize = text => String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 const stop = new Set('quem qual que o a os as de do da dos das em um uma e se ao para por com mais menos seria teria voce voces parceiro pessoa primeiro melhor muito mesmo quando como'.split(' '));
-function tokens(text) { return new Set(normalize(text).split(' ').filter(t => !stop.has(t))); }
+function tokens(text) {
+  // Reviewed paraphrases from the catalog; this is intentionally not a general thesaurus.
+  const value = normalize(text).replace(/sente (?:mais )?falta de carinho|sente (?:mais )?saudade/g, 'saudade');
+  return new Set(value.split(' ').filter(t => !stop.has(t)));
+}
 function similar(a, b) {
   if (normalize(a) === normalize(b)) return true;
   const x = tokens(a), y = tokens(b);
