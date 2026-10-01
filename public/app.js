@@ -66,12 +66,12 @@ let S = {
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
-  ws.addEventListener('open', () => { S.connError = ''; render(); });
+  ws.addEventListener('open', () => { S.connError = ''; Boot.mark('connection'); render(); });
   ws.addEventListener('message', (ev) => {
     let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
     handleMessage(msg);
   });
-  ws.addEventListener('close', () => { S.connError = 'Conexão com o servidor encerrada. Recarregue a página.'; render(); });
+  ws.addEventListener('close', () => { S.connError = 'A conexão foi encerrada. Volte ao início para criar ou entrar em outra sala.'; Boot.fail('A conexão com o servidor foi encerrada. Tente novamente.'); render(); });
 }
 
 function sendMsg(obj) {
@@ -82,11 +82,12 @@ function sendMsg(obj) {
 function setState(patch) { Object.assign(S, patch); render(); }
 
 function handleMessage(msg) {
+  msg = safeMessage(msg);
   switch (msg.type) {
     case 'error': setState({ error: msg.message }); break;
     case 'room_created':
     case 'joined':
-      S.mode = msg.mode; S.roomCode = msg.code;
+      Sound.cue('join'); S.mode = msg.mode; S.roomCode = msg.code;
       if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
       else { S.playerId = msg.playerId; }
       setState({ screen: 'lobby', error: '' });
@@ -101,10 +102,11 @@ function handleMessage(msg) {
       if (S.screen === 'lobby') render();
       break;
     case 'game_state':
+      if ((msg.revealed || msg.allVoted) && !(S.game?.questionIndex === msg.questionIndex && (S.game.revealed || S.game.allVoted))) Sound.cue(msg.skipped ? 'warning' : (msg.match || (msg.allVoted && !msg.tie)) ? 'success' : 'error');
       S.game = msg; S.screen = 'game'; render();
       break;
     case 'game_finished':
-      S.finished = msg; S.screen = 'finished'; render();
+      Sound.cue('result'); S.finished = msg; S.screen = 'finished'; render();
       break;
     case 'duelo_setup':
       S.dueloQuestions = msg.questions; S.dueloPhase = 'setup'; S.dueloLocalIndex = 0;
@@ -115,6 +117,7 @@ function handleMessage(msg) {
       S.dueloWaiting = false; S.dueloLastResult = null; render();
       break;
     case 'duelo_guess_result':
+      Sound.cue(msg.correct ? 'success' : 'error');
       S.dueloLastResult = { correct: msg.correct, actualChoice: msg.actualChoice };
       render();
       break;
@@ -209,14 +212,17 @@ function actionLookupRoom() {
 function actionJoinRoom() {
   if (!S.formName.trim()) { setState({ error: 'Digite seu nome.' }); return; }
   if (S.joinLobby.mode === 'dupla' && !S.joinTarget) { setState({ error: 'Escolha uma opção.' }); return; }
-  sendMsg({ type: 'join_room', code: S.roomCode, name: S.formName.trim(), gender: S.formGender, target: S.joinTarget });
+  sendMsg({ type: 'join_room', code: S.roomCode, name: S.formName.trim(), gender: S.formGender, target: S.joinTarget === '__new__' ? 'new' : S.joinTarget });
 }
 
 function actionStartGame() { sendMsg({ type: 'start_game' }); }
-function actionAnswer(choice) { sendMsg({ type: 'answer', choice }); }
-function actionVote(targetId) { sendMsg({ type: 'vote', targetId }); }
+function actionAnswer(choice) { Sound.cue('answer'); sendMsg({ type: 'answer', choice }); }
+function actionVote(targetId) { Sound.cue('answer'); sendMsg({ type: 'vote', targetId }); }
 function actionReady() { sendMsg({ type: 'ready' }); }
-function copyCode() { if (navigator.clipboard) navigator.clipboard.writeText(S.roomCode); }
+async function copyCode() {
+  try { await navigator.clipboard.writeText(S.roomCode); setState({ copyStatus: 'Código copiado!' }); }
+  catch { setState({ copyStatus: 'Selecione o código acima para copiar.' }); }
+}
 
 function resetToHome() {
   S = Object.assign(S, {
@@ -232,11 +238,39 @@ function resetToHome() {
 
 /* ---------- Render helpers ---------- */
 
-function creditFooter() {
-  return `<footer class="credit">Desenvolvido por Plínio Augusto e Esio Lima<br>© 2026 ConectAí. Todos os direitos reservados.</footer>`;
+function escapeHTML(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function safeMessage(value) {
+  if (typeof value === 'string') return escapeHTML(value);
+  if (Array.isArray(value)) return value.map(safeMessage);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k,v]) => [k, safeMessage(v)]));
+  return value;
 }
-
-function render() { document.getElementById('app').innerHTML = renderScreen() + creditFooter(); }
+let lastScreen = '';
+let lastRound = '';
+function render() {
+  const root = document.getElementById('app');
+  const focused = document.activeElement;
+  const focusKey = root.contains(focused) ? focused.getAttribute('oninput') || focused.getAttribute('onclick') : null;
+  const selection = focused && 'selectionStart' in focused ? [focused.selectionStart, focused.selectionEnd] : null;
+  const changed = lastScreen !== S.screen;
+  const round = S.screen === 'game' ? `${S.mode}:${S.game?.questionIndex}:${S.dueloPhase}:${S.dueloLocalIndex}` : '';
+  const newRound = round && round !== lastRound;
+  document.body.dataset.screen = S.screen;
+  document.body.dataset.mode = S.mode || S.screen;
+  root.innerHTML = UI.shell(S, renderScreen());
+  UI.enhance(root);
+  if (S.copyStatus && S.screen === 'lobby') {
+    const code = root.querySelector('.code-box');
+    code?.insertAdjacentHTML('afterend', `<p role="status" class="muted">${S.copyStatus}</p>`);
+  }
+  if (focusKey && !changed && !newRound) {
+    const target = [...root.querySelectorAll('[oninput],[onclick]')].find(el => el.getAttribute('oninput') === focusKey || el.getAttribute('onclick') === focusKey);
+    target?.focus({preventScroll:true});
+    if (selection && target?.setSelectionRange) target.setSelectionRange(...selection);
+  } else if ((changed && lastScreen) || newRound) { root.querySelector('h1')?.focus({preventScroll:true}); window.scrollTo(0,0); }
+  lastScreen = S.screen;
+  lastRound = round;
+}
 
 function chatPanel() {
   const msgs = S.chatMessages.map((m) => `<div class="chat-msg"><b>${m.name}:</b> ${m.text}</div>`).join('');
@@ -245,7 +279,7 @@ function chatPanel() {
       <h3 style="font-size:14px; color:var(--ink-soft); margin-bottom:8px;">💬 CHAT</h3>
       <div class="chat-messages" id="chatMessages">${msgs || '<p class="muted" style="font-size:13px;">Nenhuma mensagem ainda.</p>'}</div>
       <div class="chat-input-row">
-        <input type="text" value="${S.chatInput}" oninput="S.chatInput=this.value" onkeydown="if(event.key==='Enter'){actionSendChat();}" placeholder="Escreva algo...">
+        <input type="text" value="${escapeHTML(S.chatInput)}" oninput="S.chatInput=this.value" onkeydown="if(event.key==='Enter'){actionSendChat();}" placeholder="Escreva algo...">
         <button class="btn btn-secondary" style="width:auto; margin:0; padding:10px 16px;" onclick="actionSendChat()">Enviar</button>
       </div>
     </div>
@@ -253,16 +287,13 @@ function chatPanel() {
 }
 
 function logoBlock() {
-  return `
-    <div class="logo"><h1>🐸 ConectAí</h1><div class="underline"></div></div>
-    <div class="tagline">Duas pessoas. Uma conexão.</div>
-  `;
+  return '';
 }
 function errBlock() { return S.error ? `<div class="error-box">${S.error}</div>` : ''; }
 function connErrBlock() { return S.connError ? `<div class="error-box">${S.connError}</div>` : ''; }
 
 function renderScreen() {
-  if (S.connError) return `${logoBlock()}${connErrBlock()}`;
+  if (S.connError) return `${connErrBlock()}<button class="btn btn-primary" onclick="location.reload()">Voltar ao início</button>`;
   switch (S.screen) {
     case 'home': return screenHome();
     case 'setupDupla': return screenSetupDupla();
@@ -284,13 +315,13 @@ function renderScreen() {
 
 function screenHome() {
   return `
-    ${logoBlock()}
     ${errBlock()}
-    <button class="btn btn-primary" onclick="setState({screen:'setupDupla', error:''})">🤝 MODO DUPLA</button>
-    <button class="btn btn-accent" onclick="setState({screen:'setupGrupo', error:''})">👨‍👩‍👧‍👦 MODO FAMÍLIA / GALERA</button>
-    <button class="btn btn-secondary" onclick="setState({screen:'setupDuelo', error:''})">⚔️ MODO DUELO (1x1)</button>
-    <button class="btn btn-ghost" onclick="setState({screen:'join', joinStep:'code', joinCodeInput:'', error:'', formName:'', formGender:'F', joinTarget:null})">ENTRAR EM UMA PARTIDA</button>
-    <p class="muted">Duelo: só vocês dois, um quiz pra ver quem conhece melhor quem.</p>
+    <p class="eyebrow">ESCOLHA SEU JEITO DE JOGAR</p>
+    <button class="mode-card mode-dupla" onclick="setState({screen:'setupDupla', error:''})"><span class="mode-number">01</span><span><strong>Modo Dupla</strong><small>Quem é mais provável? Testem a sintonia.</small><em>2 a 8 pessoas · até 4 duplas</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+    <button class="mode-card mode-grupo" onclick="setState({screen:'setupGrupo', error:''})"><span class="mode-number">02</span><span><strong>Família / Galera</strong><small>Uma pergunta. Todo mundo tem um nome.</small><em>3 a 6 pessoas · votação em grupo</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+    <button class="mode-card mode-duelo" onclick="setState({screen:'setupDuelo', error:''})"><span class="mode-number">03</span><span><strong>Duelo</strong><small>Será que você adivinha minhas respostas?</small><em>2 pessoas · quiz de preferências</em></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+    <div class="join-invite"><span>Já recebeu um código?</span><button class="btn btn-secondary" onclick="setState({screen:'join', joinStep:'code', joinCodeInput:'', error:'', formName:'', formGender:'F', joinTarget:null})">Entrar em uma partida <span aria-hidden="true">→</span></button></div>
+    <p class="home-note">Sem cadastro. Cada pessoa joga no seu aparelho.</p>
   `;
 }
 
@@ -306,16 +337,17 @@ function genderPicker() {
 
 function questionCountPicker() {
   let options = QUESTION_COUNTS;
-  if (S.themeId !== 'aleatorio') {
+  if (S.screen === 'setupDupla' && S.themeId !== 'aleatorio') {
     const theme = (S.themesCatalog || []).find((t) => t.id === S.themeId);
     const max = theme ? theme.total : 25;
     options = [Math.min(20, max), max].filter((n, i, arr) => arr.indexOf(n) === i);
     if (S.questionCount > max || !options.includes(S.questionCount)) S.questionCount = max;
   }
+  if (!options.includes(S.questionCount)) S.questionCount = options[0];
   return `
     <label class="field-label">Quantidade de perguntas</label>
     <div class="chip-row">
-      ${options.map((n) => `<div class="chip ${S.questionCount === n ? 'selected' : ''}" onclick="setState({questionCount:${n}})">${n}${S.themeId !== 'aleatorio' && n === options[options.length - 1] ? ' (todas)' : ''}</div>`).join('')}
+      ${options.map((n) => `<div class="chip ${S.questionCount === n ? 'selected' : ''}" onclick="setState({questionCount:${n}})">${n}</div>`).join('')}
     </div>
   `;
 }
@@ -328,7 +360,7 @@ function customToggle() {
     </div>
     ${S.customMode ? `
       <label class="field-label">Suas perguntas (uma por linha)</label>
-      <textarea oninput="S.customText=this.value" placeholder="Quem é mais organizado?\nQuem cozinha melhor?">${S.customText}</textarea>
+      <textarea oninput="S.customText=this.value" placeholder="Quem é mais organizado?\nQuem cozinha melhor?">${escapeHTML(S.customText)}</textarea>
       <p class="hint">A quantidade de perguntas será igual ao número de linhas preenchidas.</p>
     ` : ''}
   `;
@@ -341,7 +373,7 @@ function screenSetupDupla() {
     ${logoBlock()}
     <div class="card">
       <label class="field-label">Seu nome</label>
-      <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Ex: Plínio">
+      <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Ex: Plínio">
       ${genderPicker()}
 
       <label class="field-label">Tipo de dupla</label>
@@ -374,6 +406,7 @@ function screenSetupDupla() {
       ` : ''}
 
       ${customToggle()}
+      ${!S.customMode ? '<p class="hint">A partida pode ser menor se faltarem perguntas distintas no tema escolhido.</p>' : ''}
       ${errBlock()}
       <button class="btn btn-primary" onclick="actionCreateDupla()">CRIAR PARTIDA</button>
       <button class="btn btn-ghost" onclick="setState({screen:'home', error:''})">Voltar</button>
@@ -386,10 +419,10 @@ function screenSetupDuelo() {
     ${logoBlock()}
     <div class="card">
       <label class="field-label">Seu nome</label>
-      <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+      <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
       <label class="field-label">Quantidade de perguntas</label>
       <div class="chip-row">
-        ${S.dueloCountOptions.map((n) => `<div class="chip ${S.dueloCount === n ? 'selected' : ''}" onclick="setState({dueloCount:${n}})">${n === S.dueloCountOptions[S.dueloCountOptions.length - 1] ? n + ' (todas)' : n}</div>`).join('')}
+        ${S.dueloCountOptions.map((n) => `<div class="chip ${S.dueloCount === n ? 'selected' : ''}" onclick="setState({dueloCount:${n}})">${n}</div>`).join('')}
       </div>
       ${errBlock()}
       <button class="btn btn-primary" onclick="actionCreateDuelo()">CRIAR PARTIDA</button>
@@ -404,7 +437,7 @@ function screenSetupGrupo() {
     ${logoBlock()}
     <div class="card">
       <label class="field-label">Seu nome</label>
-      <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+      <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
 
       <label class="field-label">Tipo de grupo</label>
       <div class="chip-row">
@@ -422,6 +455,7 @@ function screenSetupGrupo() {
       ` : ''}
 
       ${customToggle()}
+      ${!S.customMode ? '<p class="hint">A partida pode ser menor se faltarem perguntas distintas no tema escolhido.</p>' : ''}
       ${errBlock()}
       <button class="btn btn-primary" onclick="actionCreateGrupo()">CRIAR PARTIDA</button>
       <button class="btn btn-ghost" onclick="setState({screen:'home', error:''})">Voltar</button>
@@ -438,7 +472,7 @@ function screenJoin() {
       ${logoBlock()}
       <div class="card">
         <label class="field-label">Código da partida</label>
-        <input type="text" style="text-transform:uppercase; text-align:center; letter-spacing:4px; font-family:'Baloo 2'; font-size:22px;" value="${S.joinCodeInput}" oninput="S.joinCodeInput=this.value.toUpperCase()" placeholder="K7P2XM" maxlength="6">
+        <input type="text" style="text-transform:uppercase; text-align:center; letter-spacing:4px; font-family:'Baloo 2'; font-size:22px;" value="${escapeHTML(S.joinCodeInput)}" oninput="S.joinCodeInput=this.value.toUpperCase()" placeholder="K7P2XM" maxlength="6">
         ${errBlock()}
         <button class="btn btn-primary" onclick="actionLookupRoom()">CONTINUAR</button>
         <button class="btn btn-ghost" onclick="setState({screen:'home', error:''})">Voltar</button>
@@ -464,7 +498,7 @@ function screenJoin() {
       <div class="card">
         <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo Dupla</p>
         <label class="field-label">Seu nome</label>
-        <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+        <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
         ${genderPicker()}
         <label class="field-label">Escolha uma opção</label>
         <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">${options}</div>
@@ -482,7 +516,7 @@ function screenJoin() {
       <div class="card">
         <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo ${lobby.flavor === 'familia' ? 'Família' : 'Galera'}</p>
         <label class="field-label">Seu nome</label>
-        <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+        <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
         ${full ? '<p class="muted">Esta partida já está cheia.</p>' : ''}
         ${errBlock()}
         <button class="btn btn-primary" ${full ? 'disabled' : ''} onclick="actionJoinRoom()">ENTRAR</button>
@@ -498,7 +532,7 @@ function screenJoin() {
     <div class="card">
       <p class="muted" style="margin-bottom:14px;">Partida <b>${lobby.code}</b> — Modo Duelo</p>
       <label class="field-label">Seu nome</label>
-      <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
+      <input type="text" value="${escapeHTML(S.formName)}" oninput="S.formName=this.value" placeholder="Seu nome">
       ${full ? '<p class="muted">Esta partida já está cheia.</p>' : ''}
       ${errBlock()}
       <button class="btn btn-primary" ${full ? 'disabled' : ''} onclick="actionJoinRoom()">ENTRAR</button>
@@ -526,7 +560,7 @@ function screenLobby() {
         <p class="muted">Compartilhe este código:</p>
         <div class="code-box">${lobby.code}</div>
         <button class="btn btn-secondary" onclick="copyCode()">COPIAR CÓDIGO</button>
-        <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Duplas na sala (${lobby.couples.length}/${lobby.maxCouples}) · ${lobby.questionCount} perguntas</h3>
+        <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Duplas na sala (${lobby.couples.length}/${lobby.maxCouples}) · ${lobby.questionCount} pergunta${lobby.questionCount === 1 ? '' : 's'}</h3>
         ${rows}
         ${errBlock()}
         ${iAmHost ? `<button class="btn btn-primary" ${completeCount === 0 ? 'disabled' : ''} onclick="actionStartGame()">INICIAR JOGO</button>` : `<p class="muted">Aguardando o organizador iniciar a partida...</p>`}
@@ -546,7 +580,7 @@ function screenLobby() {
         <p class="muted">Compartilhe este código:</p>
         <div class="code-box">${lobby.code}</div>
         <button class="btn btn-secondary" onclick="copyCode()">COPIAR CÓDIGO</button>
-        <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Pessoas na sala (${lobby.players.length}/${lobby.maxPlayers}) · ${lobby.questionCount} perguntas</h3>
+        <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Pessoas na sala (${lobby.players.length}/${lobby.maxPlayers}) · ${lobby.questionCount} pergunta${lobby.questionCount === 1 ? '' : 's'}</h3>
         ${rows}
         ${errBlock()}
         ${iAmHost
@@ -566,7 +600,7 @@ function screenLobby() {
       <p class="muted">Compartilhe este código:</p>
       <div class="code-box">${lobby.code}</div>
       <button class="btn btn-secondary" onclick="copyCode()">COPIAR CÓDIGO</button>
-      <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Jogadores (${lobby.players.length}/2) · ${lobby.questionCount} perguntas</h3>
+      <h3 style="margin:18px 0 10px; font-size:16px; color:var(--ink-soft);">Jogadores (${lobby.players.length}/2) · ${lobby.questionCount} pergunta${lobby.questionCount === 1 ? '' : 's'}</h3>
       ${rows}
       ${errBlock()}
       ${iAmHost
@@ -775,7 +809,7 @@ function screenFinishedGrupo() {
   `).join('');
   return `
     ${logoBlock()}
-    <h2 style="text-align:center; color:var(--green-dark); margin-bottom:6px;">RELATÓRIO DO ${f.flavorLabel.toUpperCase()}</h2>
+    <h2 style="text-align:center; color:var(--green-dark); margin-bottom:6px;">RELATÓRIO · ${f.flavorLabel.toUpperCase()}</h2>
     <p class="muted" style="margin-bottom:16px;">Veja o que o grupo pensa sobre cada um:</p>
     ${cards}
     <div class="top-link"><a href="#" onclick="resetToHome(); return false;">Jogar uma nova partida</a></div>
@@ -784,14 +818,15 @@ function screenFinishedGrupo() {
 
 /* ---------- Início ---------- */
 
-fetch('/api/themes').then((r) => r.json()).then((data) => {
+fetch('/api/themes').then((r) => { if (!r.ok) throw new Error('catalog'); return r.json(); }).then((data) => {
   S.themesCatalog = data.themes;
   if (Array.isArray(data.dueloCountOptions) && data.dueloCountOptions.length) {
     S.dueloCountOptions = data.dueloCountOptions;
     S.dueloCount = data.dueloCountOptions[0];
   }
   if (S.screen === 'setupDupla' || S.screen === 'setupDuelo') render();
-}).catch(() => { S.themesCatalog = []; });
+  Boot.mark('catalog');
+}).catch(() => { Boot.fail('Não conseguimos carregar os temas. Verifique sua conexão e tente novamente.'); });
 
 connect();
 render();

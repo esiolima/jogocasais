@@ -7,6 +7,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const WebSocket = require('ws');
+const { buildQuestions } = require('./questions/service');
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
@@ -87,8 +88,15 @@ function buildDuplaQuestionSet(opts) {
       .concat(theme.tension.map((q) => ({ text: q, themeId: theme.id, themeName: theme.name, themeIcon: theme.icon, value: 1 })));
   }
 
-  const n = Math.min(questionCount, pool.length);
-  return shuffle(pool).slice(0, n);
+  return buildQuestions({ context: { mode: 'dupla', ...opts }, catalog: pool, count: questionCount,
+    decorate(q) {
+      if (q.source !== 'rules') return q;
+      const t = themeById(q.themeId);
+      if (!t) return null;
+      const value = themeId !== 'aleatorio' ? 1 : (rankingMode ? t.rankingPoints : 1) + (q.tension && !tensionMode ? 1 : 0);
+      return { ...q, themeName: t.name, themeIcon: t.icon, value };
+    }
+  });
 }
 
 function buildGrupoQuestionSet(opts) {
@@ -98,8 +106,8 @@ function buildGrupoQuestionSet(opts) {
     return list.map((text) => ({ text, themeName: 'Personalizado', themeIcon: '✍️' }));
   }
   const source = tensionMode ? FAMILIA.tension : FAMILIA.questions.concat(FAMILIA.tension);
-  const n = Math.min(questionCount, source.length);
-  return shuffle(source).slice(0, n).map((text) => ({ text, themeName: 'Família & Amigos', themeIcon: '👨‍👩‍👧‍👦' }));
+  return buildQuestions({ context: { mode: 'grupo', ...opts }, catalog: source.map(text => ({ text })), count: questionCount,
+    decorate: q => ({ ...q, themeName: 'Família & Amigos', themeIcon: '👨‍👩‍👧‍👦' }) });
 }
 
 function send(ws, obj) {
@@ -171,7 +179,7 @@ function championMessage(room) {
   }
   const names = winner.players.map((p) => p.name).join(' & ');
   const rel = RELATIONSHIP_LABELS[room.relationshipType] || RELATIONSHIP_LABELS.outro;
-  return { coupleId: winner.id, names, message: `${rel.label} ${names} foi ${rel.article} grande campe${rel.suffix}! 🏆` };
+  return { coupleId: winner.id, names, message: `${rel.label} ${names} foi ${rel.article} grande ${rel.suffix === 'a' ? 'campeã' : 'campeão'}! 🏆` };
 }
 
 function finishedPayloadDupla(room) {
@@ -300,8 +308,7 @@ function broadcastChat(room, name, text) {
 /* ================== MODO DUELO (1x1) ================== */
 
 function pickDueloQuestions(count) {
-  const n = Math.min(count, QUIZ.length);
-  return shuffle(QUIZ.map((q, i) => i)).slice(0, n).map((i) => ({ text: QUIZ[i].text, options: QUIZ[i].options }));
+  return buildQuestions({ context: { mode: 'duelo' }, catalog: QUIZ, count });
 }
 
 function lobbyPayloadDuelo(room) {
@@ -351,7 +358,7 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw); } catch (e) { return; }
 
     if (msg.type === 'create_room') {
-      const name = (msg.name || '').trim().slice(0, 30);
+      const name = String(msg.name || '').trim().slice(0, 30);
       if (!name) return send(ws, { type: 'error', message: 'Digite seu nome.' });
       const mode = (msg.mode === 'grupo' || msg.mode === 'duelo') ? msg.mode : 'dupla';
       const questionCount = Number.isInteger(msg.questionCount) && msg.questionCount > 0 && msg.questionCount <= 400 ? msg.questionCount : 20;
@@ -366,7 +373,7 @@ wss.on('connection', (ws) => {
           : (THEMES.some((t) => t.id === msg.themeId) ? msg.themeId : 'aleatorio');
         const rankingMode = themeId === 'aleatorio' && !!msg.rankingMode;
         const tensionMode = themeId === 'aleatorio' && !!msg.tensionMode;
-        const questions = buildDuplaQuestionSet({ themeId, rankingMode, tensionMode, questionCount, customQuestions });
+        const questions = buildDuplaQuestionSet({ themeId, rankingMode, tensionMode, questionCount, customQuestions, relationshipType });
 
         const playerId = uid();
         const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
@@ -417,7 +424,7 @@ wss.on('connection', (ws) => {
       if (!room) return send(ws, { type: 'lookup_result', found: false });
       if (room.status !== 'lobby') return send(ws, { type: 'lookup_result', found: true, started: true });
       const payload = room.mode === 'dupla' ? lobbyPayloadDupla(room) : room.mode === 'grupo' ? lobbyPayloadGrupo(room) : lobbyPayloadDuelo(room);
-      send(ws, Object.assign({ type: 'lookup_result', found: true, started: false }, payload));
+      send(ws, { ...payload, type: 'lookup_result', found: true, started: false });
       return;
     }
 
@@ -426,7 +433,7 @@ wss.on('connection', (ws) => {
       const room = rooms.get(code);
       if (!room) return send(ws, { type: 'error', message: 'Partida não encontrada.' });
       if (room.status !== 'lobby') return send(ws, { type: 'error', message: 'Esta partida já começou.' });
-      const name = (msg.name || '').trim().slice(0, 30);
+      const name = String(msg.name || '').trim().slice(0, 30);
       if (!name) return send(ws, { type: 'error', message: 'Digite seu nome.' });
 
       if (room.mode === 'dupla') {
@@ -466,7 +473,7 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'start_game') {
       const room = rooms.get(ws.roomCode);
-      if (!room) return;
+      if (!room || room.status !== 'lobby') return;
       if (room.mode === 'dupla') {
         if (room.hostCoupleId !== ws.coupleId || ws.playerIndex !== 0) return send(ws, { type: 'error', message: 'Só quem criou a sala pode iniciar.' });
         if (room.couples.filter((c) => c.players.length === 2).length === 0) return send(ws, { type: 'error', message: 'Pelo menos uma dupla precisa estar completa.' });
@@ -555,7 +562,7 @@ wss.on('connection', (ws) => {
       if (myIdx === -1) return;
       if (!Number.isInteger(msg.index) || msg.index < 0 || msg.index >= room.questions.length) return;
       if (room.setupAnswers[myIdx][msg.index] !== undefined) return; // não permite alterar
-      if (!Number.isInteger(msg.choice)) return;
+      if (!Number.isInteger(msg.choice) || msg.choice < 0 || msg.choice >= room.questions[msg.index].options.length) return;
       room.setupAnswers[myIdx][msg.index] = msg.choice;
 
       const done = room.setupAnswers[myIdx].filter((a) => a !== undefined).length;
@@ -576,7 +583,7 @@ wss.on('connection', (ws) => {
       if (!Number.isInteger(msg.index) || msg.index < 0 || msg.index >= room.questions.length) return;
       if (!room.guesses) room.guesses = [[], []];
       if (room.guesses[myIdx][msg.index] !== undefined) return;
-      if (!Number.isInteger(msg.choice)) return;
+      if (!Number.isInteger(msg.choice) || msg.choice < 0 || msg.choice >= room.questions[msg.index].options.length) return;
       room.guesses[myIdx][msg.index] = msg.choice;
 
       const actualChoice = room.setupAnswers[otherIdx][msg.index];

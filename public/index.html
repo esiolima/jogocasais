@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ConectAí — Jogo online para duplas, amigos e família</title>
 <meta name="description" content="ConectAí: jogo online e gratuito para testar a sintonia em casal, com amigos ou em família. Crie uma sala, compartilhe o código e descubra quem pensa mais parecido.">
 <meta name="author" content="Plínio Augusto e Esio Lima">
@@ -15,10 +15,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="preload" href="assets/chameleon-atlas.png" as="image">
 </head>
 <body>
-<div id="app"></div>
-<noscript><h1>ConectAí</h1><p>Jogo online para duplas, amigos e família. Ative o JavaScript para jogar.</p></noscript>
+<a class="skip-link" href="#main">Ir para o conteúdo</a>
+<div id="intro" class="intro" aria-label="Abertura do ConectAí">
+  <button id="intro-skip" class="about-link">Pular abertura</button>
+  <div class="intro-scene"><div class="mascot intro-mascot" aria-hidden="true"><div class="mascot-art pose-0"></div></div><h1 class="intro-title">Conect<span>Aí</span></h1><p>Uma pergunta. Muitas conexões.</p></div>
+  <div class="boot-info"><p id="boot-status" role="status">Preparando seu próximo encontro…</p><progress id="boot-progress" max="3" value="0" aria-label="Recursos essenciais carregados"></progress><button id="boot-retry" class="btn btn-secondary" hidden>Tentar novamente</button></div>
+</div>
+<div id="app" inert></div>
+<noscript><style>.intro{display:none!important}</style><h1>ConectAí</h1><p>Jogo online para duplas, amigos e família. Ative o JavaScript para jogar.</p></noscript>
+<script src="boot.js"></script>
+<script src="ui.js"></script>
+<script src="sound.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
