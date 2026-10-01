@@ -107,3 +107,5 @@ label.field-label{font-weight:800; font-size:13px; color:var(--ink-soft); displa
 .chat-msg b{color:var(--green-dark);}
 .chat-input-row{display:flex; gap:8px;}
 .chat-input-row input{flex:1; margin-bottom:0;}
+
+.credit{margin-top:auto; padding-top:28px; text-align:center; font-size:12px; line-height:1.5; color:var(--ink-soft); opacity:.8;}

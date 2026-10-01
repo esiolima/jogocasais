@@ -1,3 +1,7 @@
+/*
+ * ConectAí — Desenvolvido por Plínio Augusto e Esio Lima.
+ * © 2026 Todos os direitos reservados.
+ */
 const GENDER_EMOJI = { M: "🧑‍🦱", F: "👩" };
 
 const RELATIONSHIP_TYPES = [
@@ -21,7 +25,6 @@ let S = {
   coupleId: null,
   playerIndex: null,
   playerId: null,
-  sessionToken: null,
   lobby: null,
   game: null,
   finished: null,
@@ -60,60 +63,20 @@ let S = {
   joinTarget: null,
 };
 
-const SESSION_KEY = 'conectai_session';
-function saveSession() {
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({
-      roomCode: S.roomCode, mode: S.mode, sessionToken: S.sessionToken,
-    }));
-  } catch (e) { /* localStorage indisponível (modo anônimo etc.) */ }
-}
-function loadSession() {
-  try { const raw = localStorage.getItem(SESSION_KEY); return raw ? JSON.parse(raw) : null; }
-  catch (e) { return null; }
-}
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
-}
-
-let reconnectAttempts = 0;
-let reconnectTimer = null;
-
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
-  ws.addEventListener('open', () => {
-    reconnectAttempts = 0;
-    S.connError = '';
-    const saved = loadSession();
-    if (saved && saved.roomCode && saved.sessionToken) {
-      sendMsg({ type: 'rejoin', code: saved.roomCode, sessionToken: saved.sessionToken });
-    }
-    render();
-  });
+  ws.addEventListener('open', () => { S.connError = ''; render(); });
   ws.addEventListener('message', (ev) => {
     let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
     handleMessage(msg);
   });
-  ws.addEventListener('close', () => {
-    // A conexão pode cair quando a aba vai para segundo plano ou a tela do
-    // celular bloqueia. Em vez de exigir recarregar a página, tentamos
-    // reconectar sozinhos e retomar a sessão (sala/placar/rodada) via
-    // sessionToken guardado no localStorage.
-    reconnectAttempts++;
-    S.connError = reconnectAttempts > 6
-      ? 'Não foi possível reconectar. Verifique sua internet e recarregue a página.'
-      : 'Conexão perdida. Reconectando...';
-    render();
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    const delay = Math.min(1000 * reconnectAttempts, 5000);
-    reconnectTimer = setTimeout(connect, delay);
-  });
+  ws.addEventListener('close', () => { S.connError = 'Conexão com o servidor encerrada. Recarregue a página.'; render(); });
 }
 
 function sendMsg(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-  else setState({ error: 'Sem conexão com o servidor. Tentando reconectar...' });
+  else setState({ error: 'Sem conexão com o servidor. Recarregue a página.' });
 }
 
 function setState(patch) { Object.assign(S, patch); render(); }
@@ -123,24 +86,10 @@ function handleMessage(msg) {
     case 'error': setState({ error: msg.message }); break;
     case 'room_created':
     case 'joined':
-      S.mode = msg.mode; S.roomCode = msg.code; S.sessionToken = msg.sessionToken;
-      if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
-      else { S.playerId = msg.playerId; }
-      saveSession();
-      setState({ screen: 'lobby', error: '' });
-      break;
-    case 'rejoin_ok':
       S.mode = msg.mode; S.roomCode = msg.code;
       if (msg.mode === 'dupla') { S.coupleId = msg.coupleId; S.playerIndex = msg.playerIndex; }
       else { S.playerId = msg.playerId; }
-      S.screen = msg.status === 'lobby' ? 'lobby' : (msg.status === 'playing' ? 'game' : 'finished');
-      S.error = ''; S.connError = '';
-      render();
-      break;
-    case 'rejoin_failed':
-      // A sessão salva não existe mais no servidor (sala expirou, processo
-      // reiniciou etc.). Limpa e deixa a pessoa voltar pela tela inicial.
-      clearSession();
+      setState({ screen: 'lobby', error: '' });
       break;
     case 'lookup_result':
       if (!msg.found) { setState({ error: 'Partida não encontrada. Confira o código.' }); return; }
@@ -158,11 +107,11 @@ function handleMessage(msg) {
       S.finished = msg; S.screen = 'finished'; render();
       break;
     case 'duelo_setup':
-      S.dueloQuestions = msg.questions; S.dueloPhase = 'setup'; S.dueloLocalIndex = msg.resumeIndex || 0;
+      S.dueloQuestions = msg.questions; S.dueloPhase = 'setup'; S.dueloLocalIndex = 0;
       S.dueloWaiting = false; S.screen = 'game'; render();
       break;
     case 'duelo_guess_start':
-      S.dueloQuestions = msg.questions; S.dueloPhase = 'guess'; S.dueloLocalIndex = msg.resumeIndex || 0;
+      S.dueloQuestions = msg.questions; S.dueloPhase = 'guess'; S.dueloLocalIndex = 0;
       S.dueloWaiting = false; S.dueloLastResult = null; render();
       break;
     case 'duelo_guess_result':
@@ -270,10 +219,9 @@ function actionReady() { sendMsg({ type: 'ready' }); }
 function copyCode() { if (navigator.clipboard) navigator.clipboard.writeText(S.roomCode); }
 
 function resetToHome() {
-  clearSession();
   S = Object.assign(S, {
     screen: 'home', error: '', roomCode: null, mode: null, coupleId: null, playerIndex: null, playerId: null,
-    sessionToken: null, lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
+    lobby: null, game: null, finished: null, formName: '', formGender: 'F', relationshipType: 'casal',
     groupFlavor: 'galera', themeId: 'aleatorio', rankingMode: false, tensionMode: false, questionCount: 20,
     customMode: false, customText: '', joinStep: 'code', joinCodeInput: '', joinLobby: null, joinTarget: null,
     dueloQuestions: null, dueloPhase: null, dueloLocalIndex: 0, dueloLastResult: null, dueloWaiting: false,
@@ -284,7 +232,11 @@ function resetToHome() {
 
 /* ---------- Render helpers ---------- */
 
-function render() { document.getElementById('app').innerHTML = renderScreen(); }
+function creditFooter() {
+  return `<footer class="credit">Desenvolvido por Plínio Augusto e Esio Lima<br>© 2026 ConectAí. Todos os direitos reservados.</footer>`;
+}
+
+function render() { document.getElementById('app').innerHTML = renderScreen() + creditFooter(); }
 
 function chatPanel() {
   const msgs = S.chatMessages.map((m) => `<div class="chat-msg"><b>${m.name}:</b> ${m.text}</div>`).join('');
@@ -435,16 +387,6 @@ function screenSetupDuelo() {
     <div class="card">
       <label class="field-label">Seu nome</label>
       <input type="text" value="${S.formName}" oninput="S.formName=this.value" placeholder="Seu nome">
-
-      <div class="toggle-row">
-        <span class="toggle-label">⚔️ Como funciona o Duelo? <span class="info-icon" onclick="setState({showDueloInfo: ${!S.showDueloInfo}})">?</span></span>
-      </div>
-      ${S.showDueloInfo ? `<div class="tooltip-box">
-        <b>Fase 1 — Sobre você:</b> cada jogador responde as perguntas em segredo, falando a verdade sobre si mesmo.<br><br>
-        <b>Fase 2 — Adivinhe:</b> agora é a vez de tentar acertar o que a outra pessoa respondeu em cada pergunta.<br><br>
-        No final, ganha quem acertou mais palpites sobre o parceiro(a)!
-      </div>` : ''}
-
       <label class="field-label">Quantidade de perguntas</label>
       <div class="chip-row">
         ${S.dueloCountOptions.map((n) => `<div class="chip ${S.dueloCount === n ? 'selected' : ''}" onclick="setState({dueloCount:${n}})">${n === S.dueloCountOptions[S.dueloCountOptions.length - 1] ? n + ' (todas)' : n}</div>`).join('')}
@@ -514,7 +456,7 @@ function screenJoin() {
         Entrar como parceiro(a) de <b>&nbsp;${c.players[0].name}</b>
       </div>
     `).join('');
-    if (canNew) options += `<div class="gender-opt ${S.joinTarget === 'new' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'new'})">➕ Criar nova dupla</div>`;
+    if (canNew) options += `<div class="gender-opt ${S.joinTarget === '__new__' ? 'selected' : ''}" style="text-align:left;" onclick="setState({joinTarget:'__new__'})">➕ Criar nova dupla</div>`;
     if (!options) options = `<p class="muted">Esta partida já está cheia.</p>`;
 
     return `
@@ -575,7 +517,7 @@ function screenLobby() {
     const iAmHost = lobby.hostCoupleId === S.coupleId && S.playerIndex === 0;
     const completeCount = lobby.couples.filter((c) => c.complete).length;
     const rows = lobby.couples.map((c) => {
-      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}`).join(' &nbsp;+&nbsp; ');
+      const names = c.players.map((p) => `${GENDER_EMOJI[p.gender]} ${p.name}`).join(' &nbsp;+&nbsp; ');
       return `<div class="couple-row ${c.complete ? 'complete' : ''}"><span>${names}${c.complete ? '' : ' <span class="muted">(aguardando parceiro)</span>'}</span><span class="pill ${c.complete ? 'ok' : 'wait'}">${c.complete ? 'Completo' : 'Incompleto'}</span></div>`;
     }).join('');
     return `
@@ -595,7 +537,7 @@ function screenLobby() {
   }
 
   const iAmHost = lobby.hostId === S.playerId;
-  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}${p.disconnected ? ' <span class="muted">(reconectando...)</span>' : ''}</span></div>`).join('');
+  const rows = lobby.players.map((p) => `<div class="couple-row complete"><span>👤 ${p.name}</span></div>`).join('');
 
   if (lobby.mode === 'grupo') {
     return `
@@ -762,7 +704,6 @@ function screenGameDuelo() {
     return `
       ${logoBlock()}
       <div class="progress">FASE 1: SOBRE VOCÊ · ${i + 1} DE ${total}</div>
-      ${i === 0 ? `<div class="tooltip-box">🕵️ <b>Fase 1:</b> responda com a verdade sobre você mesmo(a). Suas respostas ficam em segredo até a Fase 2, quando a outra pessoa vai tentar adivinhá-las!</div>` : ''}
       <div class="question-card"><p>${q.text}</p></div>
       <div style="display:flex; flex-direction:column; gap:10px;">
         ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloAnswer(${i},${idx})">${opt}</div>`).join('')}
@@ -788,7 +729,6 @@ function screenGameDuelo() {
   return `
     ${logoBlock()}
     <div class="progress">FASE 2: ADIVINHE · ${i + 1} DE ${total}</div>
-    ${i === 0 ? `<div class="tooltip-box">🔮 <b>Fase 2:</b> agora tente adivinhar o que a outra pessoa respondeu em cada pergunta. Cada acerto conta ponto pra você no placar final!</div>` : ''}
     <div class="question-card"><p>O que você acha que a outra pessoa respondeu?<br><b>${q.text}</b></p></div>
     <div style="display:flex; flex-direction:column; gap:10px;">
       ${q.options.map((opt, idx) => `<div class="person-vote" onclick="actionDueloGuess(${i},${idx})">${opt}</div>`).join('')}

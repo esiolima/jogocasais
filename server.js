@@ -1,3 +1,7 @@
+/*
+ * ConectAí — Desenvolvido por Plínio Augusto e Esio Lima.
+ * © 2026 Todos os direitos reservados.
+ */
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -111,7 +115,7 @@ function lobbyPayloadDupla(room) {
     questionCount: room.questions.length,
     couples: room.couples.map((c) => ({
       id: c.id,
-      players: c.players.map((p) => ({ name: p.name, gender: p.gender, disconnected: !!p.disconnected })),
+      players: c.players.map((p) => ({ name: p.name, gender: p.gender })),
       complete: c.players.length === 2,
     })),
   };
@@ -208,7 +212,7 @@ function lobbyPayloadGrupo(room) {
   return {
     type: 'lobby_state', mode: 'grupo', code: room.code, flavor: room.flavor,
     maxPlayers: room.maxPlayers, hostId: room.hostId, questionCount: room.questions.length,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, disconnected: !!p.disconnected })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name })),
   };
 }
 
@@ -304,7 +308,7 @@ function lobbyPayloadDuelo(room) {
   return {
     type: 'lobby_state', mode: 'duelo', code: room.code, hostId: room.hostId,
     questionCount: room.questions.length,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, disconnected: !!p.disconnected })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name })),
   };
 }
 
@@ -325,18 +329,14 @@ function startDueloGuess(room) {
   room.players.forEach((p) => send(p.ws, payload));
 }
 
-function finishedPayloadDuelo(room) {
+function finishDuelo(room) {
+  room.status = 'finished';
   const s0 = room.scores[0];
   const s1 = room.scores[1];
   const scores = room.players.map((p, i) => ({ name: p.name, score: room.scores[i] }));
   const tie = s0 === s1;
   const winnerName = tie ? null : (s0 > s1 ? room.players[0].name : room.players[1].name);
-  return { type: 'game_finished', mode: 'duelo', scores, total: room.questions.length, tie, winnerName };
-}
-
-function finishDuelo(room) {
-  room.status = 'finished';
-  const payload = finishedPayloadDuelo(room);
+  const payload = { type: 'game_finished', mode: 'duelo', scores, total: room.questions.length, tie, winnerName };
   room.players.forEach((p) => send(p.ws, payload));
 }
 
@@ -369,47 +369,44 @@ wss.on('connection', (ws) => {
         const questions = buildDuplaQuestionSet({ themeId, rankingMode, tensionMode, questionCount, customQuestions });
 
         const playerId = uid();
-        const sessionToken = uid() + uid();
-        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+        const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
         const room = {
           mode, code, maxCouples: MAX_COUPLES, relationshipType, themeId, rankingMode, tensionMode,
           couples: [couple], questions, currentIndex: 0, status: 'lobby', hostCoupleId: couple.id,
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0, sessionToken });
+        send(ws, { type: 'room_created', mode, code, coupleId: couple.id, playerIndex: 0 });
         broadcastLobbyDupla(room);
       } else if (mode === 'grupo') {
         const flavor = msg.flavor === 'familia' ? 'familia' : 'galera';
         const tensionMode = !!msg.tensionMode;
         const questions = buildGrupoQuestionSet({ tensionMode, questionCount, customQuestions });
         const playerId = uid();
-        const sessionToken = uid() + uid();
         const room = {
           mode, code, flavor, tensionMode, maxPlayers: MAX_GROUP_PLAYERS,
-          players: [{ id: playerId, name, ws, sessionToken }],
+          players: [{ id: playerId, name, ws }],
           questions, currentIndex: 0, status: 'lobby', hostId: playerId,
           rounds: [{ votes: {}, ready: {}, winnerId: null, skipped: false }],
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'room_created', mode, code, playerId, sessionToken });
+        send(ws, { type: 'room_created', mode, code, playerId });
         broadcastLobbyGrupo(room);
       } else {
         // duelo (1x1)
         const dueloCount = DUELO_COUNT_OPTIONS.includes(msg.questionCount) ? msg.questionCount : DUELO_COUNT_OPTIONS[0];
         const questions = pickDueloQuestions(dueloCount);
         const playerId = uid();
-        const sessionToken = uid() + uid();
         const room = {
-          mode: 'duelo', code, players: [{ id: playerId, name, ws, sessionToken }],
+          mode: 'duelo', code, players: [{ id: playerId, name, ws }],
           questions, status: 'lobby', phase: 'lobby', hostId: playerId,
           setupAnswers: [[], []], setupDoneCount: [0, 0],
           scores: [0, 0], guessDoneCount: [0, 0],
         };
         rooms.set(code, room);
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'room_created', mode: 'duelo', code, playerId, sessionToken });
+        send(ws, { type: 'room_created', mode: 'duelo', code, playerId });
         broadcastLobbyDuelo(room);
       }
       return;
@@ -420,7 +417,7 @@ wss.on('connection', (ws) => {
       if (!room) return send(ws, { type: 'lookup_result', found: false });
       if (room.status !== 'lobby') return send(ws, { type: 'lookup_result', found: true, started: true });
       const payload = room.mode === 'dupla' ? lobbyPayloadDupla(room) : room.mode === 'grupo' ? lobbyPayloadGrupo(room) : lobbyPayloadDuelo(room);
-      send(ws, Object.assign(payload, { type: 'lookup_result', found: true, started: false }));
+      send(ws, Object.assign({ type: 'lookup_result', found: true, started: false }, payload));
       return;
     }
 
@@ -435,87 +432,34 @@ wss.on('connection', (ws) => {
       if (room.mode === 'dupla') {
         const gender = msg.gender === 'M' ? 'M' : 'F';
         const playerId = uid();
-        const sessionToken = uid() + uid();
         if (msg.target === 'new') {
           if (room.couples.length >= room.maxCouples) return send(ws, { type: 'error', message: 'Esta partida já está cheia (4 duplas).' });
-          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws, sessionToken }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
+          const couple = { id: uid(), players: [{ id: playerId, name, gender, ws }], answers: [null, null], ready: [false, false], score: 0, roundScored: false, finalAnswerAt: null };
           room.couples.push(couple);
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 0;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0, sessionToken });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 0 });
         } else {
           const couple = room.couples.find((c) => c.id === msg.target);
           if (!couple || couple.players.length >= 2) return send(ws, { type: 'error', message: 'Essa vaga já foi preenchida.' });
-          couple.players.push({ id: playerId, name, gender, ws, sessionToken });
+          couple.players.push({ id: playerId, name, gender, ws });
           ws.roomCode = code; ws.coupleId = couple.id; ws.playerIndex = 1;
-          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1, sessionToken });
+          send(ws, { type: 'joined', mode: 'dupla', code, coupleId: couple.id, playerIndex: 1 });
         }
         broadcastLobbyDupla(room);
       } else if (room.mode === 'grupo') {
         if (room.players.length >= room.maxPlayers) return send(ws, { type: 'error', message: `Esta partida já está cheia (${room.maxPlayers} pessoas).` });
         const playerId = uid();
-        const sessionToken = uid() + uid();
-        room.players.push({ id: playerId, name, ws, sessionToken });
+        room.players.push({ id: playerId, name, ws });
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'joined', mode: 'grupo', code, playerId, sessionToken });
+        send(ws, { type: 'joined', mode: 'grupo', code, playerId });
         broadcastLobbyGrupo(room);
       } else {
         if (room.players.length >= 2) return send(ws, { type: 'error', message: 'Esta partida já está cheia (2 pessoas).' });
         const playerId = uid();
-        const sessionToken = uid() + uid();
-        room.players.push({ id: playerId, name, ws, sessionToken });
+        room.players.push({ id: playerId, name, ws });
         ws.roomCode = code; ws.playerId = playerId;
-        send(ws, { type: 'joined', mode: 'duelo', code, playerId, sessionToken });
+        send(ws, { type: 'joined', mode: 'duelo', code, playerId });
         broadcastLobbyDuelo(room);
-      }
-      return;
-    }
-
-    if (msg.type === 'rejoin') {
-      const code = (msg.code || '').toUpperCase();
-      const room = rooms.get(code);
-      const token = msg.sessionToken;
-      if (!room || !token) return send(ws, { type: 'rejoin_failed' });
-
-      if (room.mode === 'dupla') {
-        let foundCouple = null; let foundIdx = -1;
-        for (const c of room.couples) {
-          const idx = c.players.findIndex((p) => p.sessionToken === token);
-          if (idx !== -1) { foundCouple = c; foundIdx = idx; break; }
-        }
-        if (!foundCouple) return send(ws, { type: 'rejoin_failed' });
-        foundCouple.players[foundIdx].ws = ws;
-        foundCouple.players[foundIdx].disconnected = false;
-        ws.roomCode = code; ws.coupleId = foundCouple.id; ws.playerIndex = foundIdx;
-        send(ws, { type: 'rejoin_ok', mode: 'dupla', code, coupleId: foundCouple.id, playerIndex: foundIdx, status: room.status });
-        if (room.status === 'lobby') { send(ws, lobbyPayloadDupla(room)); broadcastLobbyDupla(room); }
-        else if (room.status === 'playing') send(ws, gamePayloadForDupla(room, foundCouple, foundIdx));
-        else send(ws, finishedPayloadDupla(room));
-      } else if (room.mode === 'grupo') {
-        const p = room.players.find((pl) => pl.sessionToken === token);
-        if (!p) return send(ws, { type: 'rejoin_failed' });
-        p.ws = ws; p.disconnected = false;
-        ws.roomCode = code; ws.playerId = p.id;
-        send(ws, { type: 'rejoin_ok', mode: 'grupo', code, playerId: p.id, status: room.status });
-        if (room.status === 'lobby') { send(ws, lobbyPayloadGrupo(room)); broadcastLobbyGrupo(room); }
-        else if (room.status === 'playing') send(ws, gamePayloadForGrupo(room, p.id));
-        else send(ws, finishedPayloadGrupo(room));
-      } else {
-        // duelo
-        const myIdx = room.players.findIndex((pl) => pl.sessionToken === token);
-        if (myIdx === -1) return send(ws, { type: 'rejoin_failed' });
-        room.players[myIdx].ws = ws;
-        room.players[myIdx].disconnected = false;
-        ws.roomCode = code; ws.playerId = room.players[myIdx].id;
-        send(ws, { type: 'rejoin_ok', mode: 'duelo', code, playerId: room.players[myIdx].id, status: room.status });
-        if (room.status === 'lobby') { send(ws, lobbyPayloadDuelo(room)); broadcastLobbyDuelo(room); }
-        else if (room.status === 'finished') send(ws, finishedPayloadDuelo(room));
-        else if (room.phase === 'setup') {
-          const resumeIndex = room.setupAnswers[myIdx].filter((a) => a !== undefined).length;
-          send(ws, { type: 'duelo_setup', questions: room.questions, totalQuestions: room.questions.length, resumeIndex });
-        } else if (room.phase === 'guess') {
-          const resumeIndex = (room.guesses && room.guesses[myIdx] ? room.guesses[myIdx].filter((a) => a !== undefined).length : 0);
-          send(ws, { type: 'duelo_guess_start', questions: room.questions.map((q) => ({ text: q.text, options: q.options })), totalQuestions: room.questions.length, resumeIndex });
-        }
       }
       return;
     }
